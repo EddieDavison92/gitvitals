@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useConvexConnectionState, useQuery } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -14,35 +13,18 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import type { ActionsHistoryResponse, ActionsRun } from "@/lib/types";
+import { Icon, type IconName } from "@/components/icon";
+import { RepoPicker } from "@/components/repo-picker";
+import { TokenSettings } from "@/components/token-settings";
+import { getPeriodMs, PERIOD_OPTIONS, type PeriodFilter } from "@/lib/periods";
+import { useRepoRuns, type LoadError } from "@/lib/repo-store";
+import type { ActionsRun } from "@/lib/types";
 
 const EMPTY_RUNS: ActionsRun[] = [];
 const chartAnimationMs = 180;
 const initialVisibleRuns = 25;
 
-type PeriodFilter = "24h" | "7d" | "30d" | "90d" | "all";
 type RunView = "all" | "failed" | "running" | "successful";
-type IconName =
-  | "activity"
-  | "arrow-up-right"
-  | "branch"
-  | "check"
-  | "chevron"
-  | "clock"
-  | "filter"
-  | "pulse"
-  | "search"
-  | "warning"
-  | "workflow"
-  | "x";
-
-const PERIOD_OPTIONS: Array<{ value: PeriodFilter; label: string; shortLabel: string }> = [
-  { value: "24h", label: "Last 24 hours", shortLabel: "24h" },
-  { value: "7d", label: "Last 7 days", shortLabel: "7d" },
-  { value: "30d", label: "Last 30 days", shortLabel: "30d" },
-  { value: "90d", label: "Last 90 days", shortLabel: "90d" },
-  { value: "all", label: "All fetched runs", shortLabel: "All" },
-];
 
 const RUN_VIEW_OPTIONS: Array<{ value: RunView; label: string }> = [
   { value: "all", label: "All runs" },
@@ -98,68 +80,84 @@ function formatShortDate(dateValue: string) {
   return new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" }).format(date);
 }
 
-function getPeriodMs(period: PeriodFilter) {
-  const durations: Record<Exclude<PeriodFilter, "all">, number> = {
-    "24h": 24 * 60 * 60 * 1000,
-    "7d": 7 * 24 * 60 * 60 * 1000,
-    "30d": 30 * 24 * 60 * 60 * 1000,
-    "90d": 90 * 24 * 60 * 60 * 1000,
-  };
-  return period === "all" ? null : durations[period];
-}
-
-function getFetchSinceIso(period: PeriodFilter) {
-  const duration = getPeriodMs(period);
-  if (!duration) return null;
-  return new Date(Date.now() - duration * 2).toISOString();
-}
-
-function getMaxRunsForPeriod(period: PeriodFilter) {
-  switch (period) {
-    case "24h":
-      return 300;
-    case "7d":
-      return 700;
-    case "30d":
-      return 1400;
-    case "90d":
-    case "all":
-      return 2000;
-  }
-}
+// Skipped, cancelled, neutral and stale runs are neither passes nor failures.
+const FAILED_CONCLUSIONS = new Set<ActionsRun["conclusion"]>(["failure", "timed_out", "startup_failure"]);
 
 function isFailedRun(run: ActionsRun) {
-  return run.status === "completed" && run.conclusion !== "success";
+  return run.status === "completed" && FAILED_CONCLUSIONS.has(run.conclusion);
+}
+
+function isPassedRun(run: ActionsRun) {
+  return run.status === "completed" && run.conclusion === "success";
 }
 
 function statusLabel(run: ActionsRun) {
   if (run.status === "in_progress") return "Running";
   if (run.status === "queued") return "Queued";
-  if (run.conclusion === "success") return "Passed";
-  if (run.conclusion === "cancelled") return "Cancelled";
-  if (run.conclusion === "timed_out") return "Timed out";
-  return "Failed";
+  switch (run.conclusion) {
+    case "success":
+      return "Passed";
+    case "cancelled":
+      return "Cancelled";
+    case "skipped":
+      return "Skipped";
+    case "neutral":
+      return "Neutral";
+    case "stale":
+      return "Stale";
+    case "action_required":
+      return "Needs approval";
+    case "timed_out":
+      return "Timed out";
+    default:
+      return "Failed";
+  }
 }
 
 function statusTone(run: ActionsRun) {
-  if (run.status !== "completed") {
+  if (run.status !== "completed" || run.conclusion === "action_required") {
     return "border-amber-200 bg-amber-50 text-amber-700";
   }
-  if (run.conclusion === "success") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-  if (run.conclusion === "cancelled" || run.conclusion === "skipped") {
-    return "border-slate-200 bg-slate-50 text-slate-600";
-  }
-  return "border-rose-200 bg-rose-50 text-rose-700";
+  if (isPassedRun(run)) return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (isFailedRun(run)) return "border-rose-200 bg-rose-50 text-rose-700";
+  return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
 function statusDotTone(run: ActionsRun) {
-  if (run.status !== "completed") return "bg-amber-500";
-  if (run.conclusion === "success") return "bg-emerald-500";
-  if (run.conclusion === "cancelled" || run.conclusion === "skipped") return "bg-slate-400";
-  return "bg-rose-500";
+  if (run.status !== "completed" || run.conclusion === "action_required") return "bg-amber-500";
+  if (isPassedRun(run)) return "bg-emerald-500";
+  if (isFailedRun(run)) return "bg-rose-500";
+  return "bg-slate-400";
 }
+
+/** Success rate over runs that passed or failed; null when there are none. */
+function successRateOf(successful: number, failed: number) {
+  const decided = successful + failed;
+  return decided === 0 ? null : Math.round((successful / decided) * 100);
+}
+
+function formatRate(rate: number | null) {
+  return rate === null ? "–" : `${rate}%`;
+}
+
+/** Green at 95%+, amber at 85%+, red below. */
+function rateTone(rate: number | null) {
+  if (rate === null) return "neutral";
+  return rate >= 95 ? "positive" : rate >= 85 ? "warning" : "negative";
+}
+
+const RATE_TEXT = {
+  positive: "text-emerald-600",
+  warning: "text-amber-600",
+  negative: "text-rose-600",
+  neutral: "text-slate-400",
+};
+const RATE_BAR = {
+  positive: "bg-emerald-500",
+  warning: "bg-amber-500",
+  negative: "bg-rose-500",
+  neutral: "bg-slate-300",
+};
 
 function extractFailureHeadline(summary: string | null, fallback: string) {
   if (!summary) return fallback;
@@ -178,19 +176,22 @@ function median(values: number[]) {
 
 function summarizeRuns(runs: ActionsRun[]) {
   const completed = runs.filter((run) => run.status === "completed");
-  const successful = completed.filter((run) => run.conclusion === "success");
-  const failed = completed.filter((run) => run.conclusion !== "success");
+  const successful = completed.filter(isPassedRun).length;
+  const failed = completed.filter(isFailedRun).length;
   const active = runs.filter((run) => run.status !== "completed");
-  const durations = completed.map((run) => run.durationMs).filter((duration) => duration > 0);
+  // Skipped runs finish in seconds and would drag the median down.
+  const durations = completed
+    .filter((run) => isPassedRun(run) || isFailedRun(run))
+    .map((run) => run.durationMs)
+    .filter((duration) => duration > 0);
 
   return {
     total: runs.length,
     completed: completed.length,
-    successful: successful.length,
-    failed: failed.length,
+    successful,
+    failed,
     active: active.length,
-    successRate:
-      completed.length === 0 ? 0 : Math.round((successful.length / completed.length) * 100),
+    successRate: successRateOf(successful, failed),
     medianDurationMs: median(durations),
   };
 }
@@ -198,15 +199,11 @@ function summarizeRuns(runs: ActionsRun[]) {
 function runMatchesView(run: ActionsRun, view: RunView) {
   if (view === "failed") return isFailedRun(run);
   if (view === "running") return run.status !== "completed";
-  if (view === "successful") return run.status === "completed" && run.conclusion === "success";
+  if (view === "successful") return isPassedRun(run);
   return true;
 }
 
-export function ActionsDashboard({
-  initialData = null,
-}: {
-  initialData?: ActionsHistoryResponse | null;
-}) {
+export function ActionsDashboard({ owner, repo }: { owner: string; repo: string }) {
   const [workflowFilter, setWorkflowFilter] = useState("all");
   const [branchFilter, setBranchFilter] = useState("all");
   const [actorFilter, setActorFilter] = useState("all");
@@ -216,101 +213,32 @@ export function ActionsDashboard({
   const [query, setQuery] = useState("");
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showAllFailures, setShowAllFailures] = useState(false);
-  const [visibleRunCount, setVisibleRunCount] = useState(initialVisibleRuns);
-  const [showConnectionWarning, setShowConnectionWarning] = useState(false);
-  const [hasConnectedOnce, setHasConnectedOnce] = useState(false);
-  const connectionState = useConvexConnectionState();
+  const [pagination, setPagination] = useState({ key: "", count: initialVisibleRuns });
 
-  const [snapshot, setSnapshot] = useState<ActionsHistoryResponse | null>(initialData);
-  const [tailSince, setTailSince] = useState<string>(() => {
-    const base = initialData?.generatedAt
-      ? new Date(initialData.generatedAt).getTime()
-      : Date.now();
-    return new Date(base - 2 * 60_000).toISOString();
-  });
-  const lastSnapshotSyncedAt = useRef<string | null>(initialData?.generatedAt ?? null);
+  const {
+    runs: loadedRuns,
+    fetchedAt,
+    truncated,
+    coveredSince,
+    refreshMs,
+    loading,
+    error,
+    hasToken,
+    refresh,
+    enrich,
+  } = useRepoRuns(owner, repo, periodFilter);
+  const generatedAt = fetchedAt ? new Date(fetchedAt).toISOString() : null;
 
-  const fetchSnapshot = useCallback(async (period: PeriodFilter) => {
-    try {
-      const params = new URLSearchParams();
-      const since = getFetchSinceIso(period);
-      if (since) params.set("since", since);
-      params.set("maxRuns", String(getMaxRunsForPeriod(period)));
-      const response = await fetch(`/api/history?${params}`);
-      if (!response.ok) throw new Error(`snapshot fetch ${response.status}`);
-      const result: ActionsHistoryResponse = await response.json();
-      setSnapshot(result);
-      lastSnapshotSyncedAt.current = result.generatedAt;
-      setTailSince(new Date(Date.now() - 2 * 60_000).toISOString());
-    } catch (error) {
-      console.warn("[snapshot] fetch failed, keeping previous:", error);
-    }
-  }, []);
-
-  const isInitialMount = useRef(true);
-  useEffect(() => {
-    if (isInitialMount.current) {
-      isInitialMount.current = false;
-      return;
-    }
-    fetchSnapshot(periodFilter);
-  }, [periodFilter, fetchSnapshot]);
-
-  const generatedAt = useQuery(api.history.getSyncTimestamp) ?? snapshot?.generatedAt ?? null;
-
-  useEffect(() => {
-    const interval = window.setInterval(() => {
-      if (generatedAt && generatedAt !== lastSnapshotSyncedAt.current) {
-        fetchSnapshot(periodFilter);
-      }
-    }, 30 * 60_000);
-    return () => window.clearInterval(interval);
-  }, [periodFilter, fetchSnapshot, generatedAt]);
-
-  const tailRuns = useQuery(api.history.getRecentRuns, {
-    since: tailSince,
-    maxRuns: 200,
-  }) as ActionsRun[] | undefined;
-
-  const data = useMemo<ActionsHistoryResponse | null>(() => {
-    if (!snapshot) return null;
-    if (!tailRuns || tailRuns.length === 0) {
-      return { ...snapshot, generatedAt };
-    }
-    const runMap = new Map<number, ActionsRun>();
-    for (const run of snapshot.runs) runMap.set(run.id, run);
-    for (const run of tailRuns) runMap.set(run.id, run);
-    return {
-      owner: snapshot.owner,
-      repo: snapshot.repo,
-      generatedAt,
-      runs: Array.from(runMap.values()).sort(
+  const runs = useMemo(
+    () =>
+      [...(loadedRuns ?? EMPTY_RUNS)].sort(
         (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
       ),
-    };
-  }, [snapshot, tailRuns, generatedAt]);
-
-  useEffect(() => {
-    const connected =
-      connectionState.isWebSocketConnected || connectionState.hasInflightRequests;
-    if (connected) {
-      setHasConnectedOnce(true);
-      setShowConnectionWarning(false);
-      return;
-    }
-    if (!hasConnectedOnce) return;
-    const timeout = window.setTimeout(() => setShowConnectionWarning(true), 8000);
-    return () => window.clearTimeout(timeout);
-  }, [
-    connectionState.hasInflightRequests,
-    connectionState.isWebSocketConnected,
-    hasConnectedOnce,
-  ]);
-
-  const runs = data?.runs ?? EMPTY_RUNS;
+    [loadedRuns],
+  );
   const periodEnd = useMemo(
-    () => (generatedAt ? new Date(generatedAt) : new Date()),
-    [generatedAt],
+    () => (fetchedAt ? new Date(fetchedAt) : new Date()),
+    [fetchedAt],
   );
   const periodMs = getPeriodMs(periodFilter);
   const currentStartMs = periodMs ? periodEnd.getTime() - periodMs : null;
@@ -413,8 +341,15 @@ export function ActionsDashboard({
     () => summarizeRuns(scopedPreviousRuns),
     [scopedPreviousRuns],
   );
+  // Loaded runs may stop short of a period's start when the page cap was hit.
+  const coveredSinceMs = truncated && coveredSince ? new Date(coveredSince).getTime() : null;
+  const isLoadedFrom = (startMs: number | null) =>
+    coveredSinceMs === null || (startMs !== null && coveredSinceMs <= startMs);
   const successRateDelta =
-    periodFilter === "all" || previousSummary.completed === 0
+    periodFilter === "all" ||
+    summary.successRate === null ||
+    previousSummary.successRate === null ||
+    !isLoadedFrom(previousStartMs)
       ? null
       : summary.successRate - previousSummary.successRate;
 
@@ -437,9 +372,8 @@ export function ActionsDashboard({
     });
   }, [query, runView, scopedRuns]);
 
-  useEffect(() => {
-    setVisibleRunCount(initialVisibleRuns);
-  }, [
+  // Any filter change resets the table to its first page.
+  const paginationKey = [
     effectiveActorFilter,
     effectiveBranchFilter,
     effectivePrFilter,
@@ -447,7 +381,9 @@ export function ActionsDashboard({
     periodFilter,
     query,
     runView,
-  ]);
+  ].join("|");
+  const visibleRunCount =
+    pagination.key === paginationKey ? pagination.count : initialVisibleRuns;
 
   const recentFailures = useMemo(() => {
     const cutoff = periodEnd.getTime() - 48 * 60 * 60_000;
@@ -460,6 +396,19 @@ export function ActionsDashboard({
   const visibleFailures = showAllFailures
     ? recentFailures
     : recentFailures.slice(0, 5);
+
+  // Failure summaries cost two requests each, so only load what's on screen.
+  // Anonymous visitors get the failures panel; with a token, failed table rows too.
+  const enrichTargets = useMemo(
+    () =>
+      hasToken
+        ? [...visibleFailures, ...explorerRuns.slice(0, visibleRunCount).filter(isFailedRun)]
+        : visibleFailures,
+    [explorerRuns, hasToken, visibleFailures, visibleRunCount],
+  );
+  useEffect(() => {
+    enrich(enrichTargets);
+  }, [enrich, enrichTargets]);
 
   const workflowStats = useMemo(() => {
     const grouped = new Map<string, ActionsRun[]>();
@@ -479,7 +428,7 @@ export function ActionsDashboard({
           medianMinutes: Number((stats.medianDurationMs / 60_000).toFixed(1)),
         };
       })
-      .sort((a, b) => b.failed - a.failed || a.successRate - b.successRate)
+      .sort((a, b) => b.failed - a.failed || (a.successRate ?? 101) - (b.successRate ?? 101))
       .slice(0, 8);
   }, [scopedRuns]);
 
@@ -502,16 +451,15 @@ export function ActionsDashboard({
         failed: 0,
       };
       current.completed += 1;
-      if (run.conclusion === "success") current.successful += 1;
-      else current.failed += 1;
+      if (isPassedRun(run)) current.successful += 1;
+      else if (isFailedRun(run)) current.failed += 1;
       grouped.set(day, current);
     }
     return Array.from(grouped.values())
       .sort((a, b) => a.day.localeCompare(b.day))
       .map((item) => ({
         ...item,
-        successRate:
-          item.completed === 0 ? 0 : Math.round((item.successful / item.completed) * 100),
+        successRate: successRateOf(item.successful, item.failed),
       }));
   }, [scopedRuns]);
 
@@ -531,46 +479,31 @@ export function ActionsDashboard({
     setShowAllFailures(false);
   };
 
-  if (!data) {
-    return <LoadingDashboard />;
+  const refreshMinutes = refreshMs / 60_000;
+  const header = (
+    <DashboardHeader
+      owner={owner}
+      repo={repo}
+      generatedAt={generatedAt}
+      loading={loading}
+      refreshMinutes={refreshMinutes}
+      onRefresh={refresh}
+    />
+  );
+
+  if (!loadedRuns) {
+    return error ? (
+      <ErrorPage header={header} error={error} owner={owner} repo={repo} />
+    ) : (
+      <LoadingDashboard header={header} />
+    );
   }
+
+  const coverageShort = !isLoadedFrom(currentStartMs);
 
   return (
     <main className="min-h-screen bg-[#f4f6f9] text-slate-950">
-      <header className="border-b border-white/10 bg-[#0b1220] text-white">
-        <div className="mx-auto flex max-w-[1480px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-          <div className="flex min-w-0 items-center gap-3">
-            <div className="grid size-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/10 text-sky-300 shadow-inner">
-              <Icon name="workflow" className="size-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <p className="truncate text-sm font-semibold tracking-tight sm:text-base">
-                  {data.owner}/{data.repo}
-                </p>
-                <span className="hidden rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-400 sm:inline">
-                  Actions
-                </span>
-              </div>
-              <p className="truncate text-xs text-slate-400">Workflow operations</p>
-            </div>
-          </div>
-          <div className="flex shrink-0 items-center gap-2 text-xs text-slate-400">
-            <span
-              className={`size-2 rounded-full ${
-                showConnectionWarning ? "bg-amber-400" : "bg-emerald-400"
-              }`}
-            />
-            <span className="hidden sm:inline">
-              {showConnectionWarning ? "Reconnecting" : "Live"}
-            </span>
-            <span className="hidden text-slate-600 sm:inline">•</span>
-            <span title={formatTime(data.generatedAt)}>
-              Updated {formatRelativeTime(data.generatedAt)}
-            </span>
-          </div>
-        </div>
-      </header>
+      {header}
 
       <div className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 shadow-sm shadow-slate-950/[0.03] backdrop-blur">
         <div className="mx-auto flex max-w-[1480px] items-center justify-between gap-3 overflow-x-auto px-4 py-2.5 sm:px-6 lg:px-8">
@@ -676,10 +609,24 @@ export function ActionsDashboard({
       </div>
 
       <div className="mx-auto max-w-[1480px] space-y-6 px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
-        {showConnectionWarning && (
+        {error && (
           <div className="flex items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             <Icon name="warning" className="size-4 shrink-0" />
-            Live updates are reconnecting. Cached run data remains available.
+            <span>
+              {describeError(error)} Showing runs loaded {formatRelativeTime(generatedAt)}.
+            </span>
+          </div>
+        )}
+
+        {coverageShort && (
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-600">
+            <Icon name="clock" className="size-4 shrink-0 text-slate-400" />
+            <span>
+              Only runs since {formatTime(coveredSince)} are loaded ({runs.length} runs).
+              {hasToken
+                ? " That's the most this dashboard fetches."
+                : " Add a token to load up to 1,000 runs."}
+            </span>
           </div>
         )}
 
@@ -690,7 +637,9 @@ export function ActionsDashboard({
                 Current health
               </p>
               <h1 id="overview-heading" className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
-                {summary.failed > 0
+                {summary.total === 0
+                  ? "No runs in this period"
+                  : summary.failed > 0
                   ? `${summary.failed} run${summary.failed === 1 ? "" : "s"} need attention`
                   : summary.active > 0
                     ? `${summary.active} workflow${summary.active === 1 ? "" : "s"} in progress`
@@ -707,19 +656,13 @@ export function ActionsDashboard({
             <MetricCard
               icon="pulse"
               label="Success rate"
-              value={`${summary.successRate}%`}
+              value={formatRate(summary.successRate)}
               detail={
                 successRateDelta === null
                   ? `${summary.completed} completed runs`
                   : `${successRateDelta >= 0 ? "+" : ""}${successRateDelta} pts vs previous period`
               }
-              tone={
-                summary.successRate >= 95
-                  ? "positive"
-                  : summary.successRate >= 85
-                    ? "warning"
-                    : "negative"
-              }
+              tone={rateTone(summary.successRate)}
             />
             <MetricCard
               icon="warning"
@@ -857,26 +800,16 @@ export function ActionsDashboard({
                       </p>
                       <span
                         className={`shrink-0 font-mono text-xs font-semibold ${
-                          workflow.successRate >= 95
-                            ? "text-emerald-600"
-                            : workflow.successRate >= 85
-                              ? "text-amber-600"
-                              : "text-rose-600"
+                          RATE_TEXT[rateTone(workflow.successRate)]
                         }`}
                       >
-                        {workflow.successRate}%
+                        {formatRate(workflow.successRate)}
                       </span>
                     </div>
                     <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
                       <div
-                        className={`h-full rounded-full ${
-                          workflow.successRate >= 95
-                            ? "bg-emerald-500"
-                            : workflow.successRate >= 85
-                              ? "bg-amber-500"
-                              : "bg-rose-500"
-                        }`}
-                        style={{ width: `${workflow.successRate}%` }}
+                        className={`h-full rounded-full ${RATE_BAR[rateTone(workflow.successRate)]}`}
+                        style={{ width: `${workflow.successRate ?? 0}%` }}
                       />
                     </div>
                     <p className="mt-1.5 text-xs text-slate-400">
@@ -1132,7 +1065,7 @@ export function ActionsDashboard({
                 {visibleRunCount < explorerRuns.length && (
                   <button
                     type="button"
-                    onClick={() => setVisibleRunCount((count) => count + 25)}
+                    onClick={() => setPagination({ key: paginationKey, count: visibleRunCount + 25 })}
                     className="flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
                   >
                     Load 25 more
@@ -1166,7 +1099,10 @@ export function ActionsDashboard({
         </section>
 
         <footer className="flex flex-col justify-between gap-2 border-t border-slate-200 py-2 text-xs text-slate-400 sm:flex-row">
-          <span>Data served from the Convex run cache with live updates.</span>
+          <span>
+            Loaded from the GitHub API in your browser. Refreshes every{" "}
+            {refreshMinutes === 1 ? "minute" : `${refreshMinutes} minutes`} while this tab is open.
+          </span>
           <span>
             Duration reflects workflow elapsed time, not GitHub billed job-minutes.
           </span>
@@ -1176,10 +1112,120 @@ export function ActionsDashboard({
   );
 }
 
-function LoadingDashboard() {
+function describeError(error: LoadError) {
+  switch (error.kind) {
+    case "rate_limited":
+      return `GitHub's hourly request limit is used up until ${formatTime(new Date(error.resetAt).toISOString())}. Add a token to raise it.`;
+    case "not_found":
+      return "Repository not found. If it's private, add a token that can read it.";
+    case "bad_token":
+      return "GitHub rejected the saved token. Replace or remove it.";
+    case "other":
+      return `Couldn't load runs from GitHub: ${error.message}.`;
+  }
+}
+
+function DashboardHeader({
+  owner,
+  repo,
+  generatedAt,
+  loading,
+  refreshMinutes,
+  onRefresh,
+}: {
+  owner: string;
+  repo: string;
+  generatedAt: string | null;
+  loading: boolean;
+  refreshMinutes: number;
+  onRefresh: () => void;
+}) {
+  return (
+    <header className="border-b border-white/10 bg-[#0b1220] text-white">
+      <div className="mx-auto flex max-w-[1480px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
+        <div className="flex min-w-0 items-center gap-3">
+          <Link
+            href="/"
+            aria-label="Choose another repository"
+            className="grid size-9 shrink-0 place-items-center rounded-xl border border-white/10 bg-white/10 text-sky-300 shadow-inner transition hover:bg-white/15"
+          >
+            <Icon name="workflow" className="size-5" />
+          </Link>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <a
+                href={`https://github.com/${owner}/${repo}/actions`}
+                target="_blank"
+                rel="noreferrer"
+                className="truncate text-sm font-semibold tracking-tight hover:text-sky-300 sm:text-base"
+              >
+                {owner}/{repo}
+              </a>
+              <span className="hidden rounded border border-white/10 bg-white/5 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider text-slate-400 sm:inline">
+                Actions
+              </span>
+            </div>
+            <p className="truncate text-xs text-slate-400">Workflow operations</p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-2 text-xs text-slate-400">
+          <RepoPicker variant="compact" />
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading}
+            title={`Refreshes every ${refreshMinutes === 1 ? "minute" : `${refreshMinutes} minutes`}. Click to refresh now.`}
+            className="flex items-center gap-1.5 rounded-lg px-2 py-1.5 transition hover:bg-white/5 hover:text-slate-200 disabled:cursor-default"
+          >
+            <Icon name="refresh" className={`size-3.5 ${loading ? "animate-spin" : ""}`} />
+            <span className="hidden sm:inline">
+              {loading ? "Updating" : generatedAt ? `Updated ${formatRelativeTime(generatedAt)}` : "Not loaded"}
+            </span>
+          </button>
+          <TokenSettings />
+        </div>
+      </div>
+    </header>
+  );
+}
+
+function ErrorPage({
+  header,
+  error,
+  owner,
+  repo,
+}: {
+  header: React.ReactNode;
+  error: LoadError;
+  owner: string;
+  repo: string;
+}) {
   return (
     <main className="min-h-screen bg-[#f4f6f9] text-slate-950">
-      <header className="h-16 bg-[#0b1220]" />
+      {header}
+      <div className="mx-auto grid max-w-xl place-items-center px-6 py-24 text-center">
+        <div className="grid size-11 place-items-center rounded-full bg-amber-50 text-amber-600">
+          <Icon name="warning" className="size-5" />
+        </div>
+        <h1 className="mt-4 text-xl font-semibold tracking-tight">
+          Couldn&apos;t load {owner}/{repo}
+        </h1>
+        <p className="mt-2 text-sm leading-6 text-slate-600">{describeError(error)}</p>
+        <Link
+          href="/"
+          className="mt-5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+        >
+          Try another repository
+        </Link>
+      </div>
+    </main>
+  );
+}
+
+function LoadingDashboard({ header }: { header: React.ReactNode }) {
+  return (
+    <main className="min-h-screen bg-[#f4f6f9] text-slate-950">
+      {header}
       <div className="h-14 border-b border-slate-200 bg-white" />
       <div className="mx-auto max-w-[1480px] space-y-5 px-4 py-7 sm:px-6 lg:px-8">
         <div className="h-8 w-72 animate-pulse rounded-lg bg-slate-200" />
@@ -1491,12 +1537,14 @@ function ReliabilityTooltip({
   label?: string;
 }) {
   if (!active || !payload?.length) return null;
-  const successRate = payload.find((item) => item.dataKey === "successRate")?.value ?? 0;
+  const successRate = payload.find((item) => item.dataKey === "successRate")?.value ?? null;
   const failed = payload.find((item) => item.dataKey === "failed")?.value ?? 0;
   return (
     <div className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs shadow-xl shadow-slate-950/10">
       <p className="font-semibold text-slate-900">{formatShortDate(String(label))}</p>
-      <p className="mt-1 text-sky-700">{successRate}% success</p>
+      <p className="mt-1 text-sky-700">
+        {successRate === null ? "No passes or failures" : `${successRate}% success`}
+      </p>
       <p className="text-rose-600">
         {failed} failed run{failed === 1 ? "" : "s"}
       </p>
@@ -1521,77 +1569,5 @@ function DurationTooltip({
         Median {formatDuration((payload[0]?.value ?? 0) * 60_000)}
       </p>
     </div>
-  );
-}
-
-function Icon({ name, className = "size-4" }: { name: IconName; className?: string }) {
-  const paths: Record<IconName, React.ReactNode> = {
-    activity: (
-      <path d="M4 12h3l2-7 4 14 2-7h5" />
-    ),
-    "arrow-up-right": (
-      <>
-        <path d="M7 17 17 7" />
-        <path d="M7 7h10v10" />
-      </>
-    ),
-    branch: (
-      <>
-        <circle cx="6" cy="5" r="2" />
-        <circle cx="18" cy="6" r="2" />
-        <circle cx="6" cy="19" r="2" />
-        <path d="M6 7v10M8 8c4 0 3-2 8-2" />
-      </>
-    ),
-    check: <path d="m5 12 4 4L19 6" />,
-    chevron: <path d="m9 18 6-6-6-6" />,
-    clock: (
-      <>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M12 7v5l3 2" />
-      </>
-    ),
-    filter: <path d="M4 6h16M7 12h10M10 18h4" />,
-    pulse: (
-      <>
-        <circle cx="12" cy="12" r="9" />
-        <path d="M7 12h2l1.5-4 3 8 1.5-4h2" />
-      </>
-    ),
-    search: (
-      <>
-        <circle cx="11" cy="11" r="7" />
-        <path d="m20 20-4-4" />
-      </>
-    ),
-    warning: (
-      <>
-        <path d="M10.3 4.2 2.7 18a2 2 0 0 0 1.8 3h15a2 2 0 0 0 1.8-3L13.7 4.2a2 2 0 0 0-3.4 0Z" />
-        <path d="M12 9v4M12 17h.01" />
-      </>
-    ),
-    workflow: (
-      <>
-        <rect x="3" y="4" width="6" height="6" rx="2" />
-        <rect x="15" y="14" width="6" height="6" rx="2" />
-        <path d="M9 7h3a4 4 0 0 1 4 4v3M6 10v4a3 3 0 0 0 3 3h6" />
-      </>
-    ),
-    x: <path d="m7 7 10 10M17 7 7 17" />,
-  };
-
-  return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      {paths[name]}
-    </svg>
   );
 }

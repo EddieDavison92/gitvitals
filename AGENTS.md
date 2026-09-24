@@ -1,101 +1,47 @@
 # AGENTS.md
 
-## Purpose
-
-Operational architecture notes for humans and coding agents working in this repository.
+Architecture notes for humans and coding agents working in this repository.
 
 ## System overview
 
-This project is a GitHub Actions observability dashboard with Convex-backed caching.
+Client-side GitHub Actions dashboard for any repository. Next.js serves the shell; all data comes from the GitHub REST API, called from the browser. No backend, database or server-side GitHub calls.
 
-- Presentation: Next.js (`src/app`, `src/components`)
-- Backend facade: Next API route `src/app/api/history/route.ts`
-- Persistent cache + ingestion engine: Convex (`convex/`)
-- Upstream provider: GitHub Actions REST API
+- `src/app/page.tsx`: landing page (repo picker, recent repos)
+- `src/app/[owner]/[repo]/[[...rest]]/page.tsx`: dashboard route; extra path segments redirect to `/owner/repo`
+- `src/components/actions-dashboard.tsx`: dashboard UI
+- `src/lib/github.ts`: API client, run mapping, failure summaries
+- `src/lib/repo-store.ts`: per-repo store (loading, incremental refresh, failure enrichment) and `useRepoRuns` hook
+- `src/lib/run-cache.ts`: `localStorage` cache and recent-repo index
+- `src/lib/token-store.ts`: optional user token in `localStorage`
 
-The request path should read from Convex cache, not call GitHub directly.
+## Data flow
 
-## Data model
+1. `useRepoRuns(owner, repo, period)` reads the cached runs, then calls `store.load(period, token)`.
+2. `load` fetches runs created since twice the period ago, unless the cache already covers it. Page 1 gives `total_count`; later pages load in parallel batches.
+3. Refresh fetches runs created since the newest cached run (minus a 10-minute overlap), stretched back to cover still-active runs from the last 24 hours.
+4. The dashboard passes on-screen failed runs to `enrich`, which loads the failed job, step and annotations (2 requests per run) and caches them by `runId:attempt`.
 
-Defined in `convex/schema.ts`:
+Store operations are serialised through a promise queue. Loads wait for hydration so the token is read before the first request.
 
-- `runs`
-  - canonical run facts (workflow, branch, status, conclusion, actor, duration)
-  - parsed failure diagnostics (`failureSummary`, `failurePoints`)
-  - indexes:
-    - `by_run_id`
-    - `by_updated_at_ms`
-- `syncState`
-  - sync cursor and health metadata per repo
-  - index:
-    - `by_key`
+## Budgets
 
-## Sync behavior
+Defined in `BUDGET` in `src/lib/repo-store.ts`:
 
-- Cron schedule: `convex/crons.ts`
-  - interval: every 1 minute
-  - job: `api.history.syncGithub`
-- Sync implementation: `convex/history.ts`
-  - incremental fetch via `since`/cursor window
-  - max runs per sync capped for API safety
-  - failed runs enriched via jobs/log parsing
-  - upsert through internal mutations in `convex/internalHistory.ts`
+- Anonymous (60 requests/hour per IP): 3 pages, 1-page refresh every 5 minutes, enrichment stops at 12 remaining requests.
+- Token (5,000/hour): 10 pages (GitHub returns at most 1,000 results for `created`-filtered queries), 5-page refresh every minute, enrichment stops at 100 remaining.
 
-## Request behavior
-
-- Dashboard calls `GET /api/history`
-- Route loads from Convex query `history:getHistory`
-- No direct GitHub API calls from this route
-- Dashboard UI uses live Convex subscriptions for immediate updates in the browser.
-
-## Environment contracts
-
-### Convex env
-
-Required for sync action:
-
-- `GITHUB_TOKEN`
-- `GITHUB_OWNER`
-- `GITHUB_REPO`
-
-### Next/Vercel env
-
-Required for API route:
-
-- `CONVEX_URL` (preferred in hosted env)
-- `NEXT_PUBLIC_CONVEX_URL` (used in local workflows)
-
-## Notifications
-
-Teams delivery is managed through the GitHub Notifications app in Teams using channel subscriptions.
-This repository does not expose custom Teams notification ingestion/ack APIs.
-
-## Local workflow (Bun-first)
-
-- Install: `bun install`
-- Start Convex local deployment: `bunx convex dev --typecheck disable`
-- Start Next app: `bunx next dev`
-
-## Production workflow
-
-1. Deploy Convex code:
-   - `bunx convex deploy -y --typecheck disable`
-2. Ensure Convex prod env vars are set.
-3. Ensure Vercel `CONVEX_URL` points to Convex prod URL.
-4. Push to `main` to trigger Vercel deploy.
+`/rate_limit` is free and is used to show the current limit.
 
 ## Guardrails
 
-- Do not commit credentials from `.env.local`.
-- Keep sync settings rate-limit aware; if frequency or maxRuns increase, re-check GitHub API budget.
-- Keep failure parsing deterministic and concise; avoid full-log storage.
-- Preserve filter + failure-first UX in dashboard edits.
+- Keep every GitHub call client-side. Don't add a server token or proxy.
+- Re-check request budgets when adding API calls; anonymous users have 60 an hour.
+- Job logs need auth even for public repos; failure summaries use steps and annotations instead.
+- Preserve the filter and failure-first UX in dashboard edits.
+- Only `failure`, `timed_out` and `startup_failure` count as failed.
 
 ## Validation checklist
 
-Before shipping:
-
 - `npm run lint`
 - `npm run build`
-- `GET /api/history` returns populated data
-- Convex cron and manual `history:syncGithub` run successfully
+- Load a busy public repo (e.g. `cli/cli`) anonymously and confirm the request count stays near 10.

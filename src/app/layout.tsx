@@ -13,8 +13,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "GitHub Actions Observability",
-  description: "Live dashboard for workflow history, reliability, and failure summaries.",
+  title: "Actions observability",
+  description: "GitHub Actions success rates, failures and durations for any public repository.",
 };
 
 export default function RootLayout({

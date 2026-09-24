@@ -14,6 +14,7 @@ export type RunConclusion =
 
 export type ActionsRun = {
   id: number;
+  attempt: number;
   name: string;
   workflowName: string;
   branch: string;
@@ -32,9 +33,20 @@ export type ActionsRun = {
   failurePoints: string[];
 };
 
+export type FailureDetail = {
+  summary: string;
+  points: string[];
+};
+
 export type ActionsHistoryResponse = {
   owner: string;
   repo: string;
   generatedAt: string | null;
   runs: ActionsRun[];
+};
+
+export type RateLimit = {
+  limit: number;
+  remaining: number;
+  resetAt: number;
 };

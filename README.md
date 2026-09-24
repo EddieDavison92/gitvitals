@@ -1,121 +1,46 @@
 # GitHub Actions Observability
 
-A Next.js dashboard for GitHub Actions reliability and failure diagnostics, backed by Convex for cached historical data.
+Success rates, recent failures and run durations for any GitHub repository's Actions workflows.
 
-## Architecture
+Enter `owner/repo` (or paste a GitHub URL) and the dashboard loads at `/owner/repo`. Replacing `github.com` with the site's address in any repo URL works too.
 
-The app uses a cache-first architecture to reduce GitHub API pressure and improve UI responsiveness.
+## How it works
 
-- Frontend: Next.js App Router + React + Recharts
-- API facade: `GET /api/history` in Next.js
-- Data store + sync engine: Convex
-- Source of truth for run ingestion: GitHub Actions REST API
+The browser calls the GitHub REST API directly. There's no backend, database or sign-in.
 
-### Data flow
+- **Runs**: `GET /repos/{owner}/{repo}/actions/runs`, filtered to twice the selected period so the dashboard can compare against the previous one. Page 1 returns the total; the remaining pages load in parallel.
+- **Failure summaries**: for failed runs on screen, the failed job and step (`/jobs`) plus failure annotations (`/check-runs/{id}/annotations`). Logs aren't used because GitHub requires auth to download them.
+- **Cache**: runs and failure summaries are kept in `localStorage` per repo (last 8 repos, 1,000 runs each). Revisits only fetch runs created since the last load.
+- **Refresh**: every 5 minutes without a token, every minute with one, while the tab is visible.
 
-1. Convex cron (`convex/crons.ts`) runs every 1 minute.
-2. Cron executes `history:syncGithub`.
-3. Sync action fetches incremental run history from GitHub and upserts into Convex tables.
-4. Sync enriches failed runs with job/log-derived failure summaries.
-5. Next.js route `/api/history` reads from Convex cache (`history:getHistory`) and returns dashboard payload.
-6. Dashboard subscribes to live Convex query updates (no client polling interval).
+## Rate limits
 
-User requests do not call GitHub APIs directly.
+| | Anonymous | With token |
+|---|---|---|
+| Requests per hour | 60 per IP | 5,000 |
+| Runs loaded | 300 | 1,000 (GitHub's cap for date-filtered queries) |
+| Failure summaries | Recent failures panel only | Also failed rows in the run table |
+| Private repos | No | Yes |
 
-## Key components
+A first visit to a busy repo costs about 10 requests anonymously.
 
-- Next API route: `src/app/api/history/route.ts`
-- Dashboard UI: `src/components/actions-dashboard.tsx`
-- Convex schema: `convex/schema.ts` (`runs`, `syncState`)
-- Convex sync logic: `convex/history.ts`
-- Convex internal db helpers: `convex/internalHistory.ts`
-- Convex schedule: `convex/crons.ts`
+The token is optional and entered in the header. Use a [fine-grained token](https://github.com/settings/personal-access-tokens/new) with read-only **Actions** access. It's stored in the browser's `localStorage` and only sent to `api.github.com`.
 
-## Environment variables
+## Metrics
 
-### Next.js / Vercel
+- **Failed** counts `failure`, `timed_out` and `startup_failure`. Skipped, cancelled and neutral runs count as neither passes nor failures.
+- **Success rate** is passed ÷ (passed + failed).
+- **Duration** is workflow elapsed time (start to last update), not billed job-minutes.
 
-- `CONVEX_URL` (or `NEXT_PUBLIC_CONVEX_URL` locally)
-
-### Convex deployment
-
-Set in Convex env (`bunx convex env set --prod ...`):
-
-- `GITHUB_TOKEN`
-- `GITHUB_OWNER`
-- `GITHUB_REPO`
-
-## Local development (Bun)
-
-1. Install deps:
+## Development
 
 ```bash
-bun install
+npm install
+npm run dev
 ```
 
-2. Start Convex local dev deployment:
-
-```bash
-bunx convex dev --typecheck disable
-```
-
-3. Start Next.js:
-
-```bash
-bunx next dev
-```
-
-4. Open [http://localhost:3000](http://localhost:3000)
+Before shipping: `npm run lint` and `npm run build`.
 
 ## Deployment
 
-### Convex production
-
-```bash
-bunx convex deploy -y --typecheck disable
-bunx convex env set --prod GITHUB_TOKEN <token>
-bunx convex env set --prod GITHUB_OWNER <owner>
-bunx convex env set --prod GITHUB_REPO <repo>
-```
-
-Optional initial backfill:
-
-```bash
-bunx convex run --prod history:syncGithub '{"since":"2026-01-01T00:00:00.000Z","maxRuns":1200,"detailsLimit":80,"minIntervalMs":0}'
-```
-
-### Vercel
-
-Set `CONVEX_URL` for `development`, `preview`, and `production` to your Convex prod URL.
-
-## Teams notifications
-
-Teams notifications are handled via the GitHub Notifications app in Teams (not custom app endpoints in this repo).
-
-Example subscriptions:
-
-```text
-@GitHub Notifications subscribe ncl-icb-analytics/dbt-ncl-analytics workflows:{name:"dbt Deploy to Production",event:"push",branch:"main"}
-@GitHub Notifications subscribe ncl-icb-analytics/dbt-ncl-analytics commits:main
-```
-
-## Notes on metrics
-
-- `Total Minutes (Est.)` is computed from workflow run durations in cached run data.
-- GitHub Usage Metrics uses billed job-minutes, so values may differ.
-
-## Troubleshooting
-
-### Convex dashboard "Connection Issue" (local)
-
-If using local deployment, ensure Convex is running:
-
-```bash
-bunx convex dev --typecheck disable
-```
-
-### Empty data after deploy
-
-- Check Convex env vars (`bunx convex env list --prod`)
-- Trigger one manual sync (`bunx convex run --prod history:syncGithub ...`)
-- Verify `CONVEX_URL` in Vercel project env
+Deploys to Vercel from `main`. No environment variables needed.
