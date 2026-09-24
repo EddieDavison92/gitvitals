@@ -8,6 +8,16 @@ updates:
       # One PR for routine minor/patch bumps; majors stay separate.
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # eslint-config-next bundles eslint-plugin-react, which breaks on ESLint 10.
+      - dependency-name: eslint
+        update-types: [version-update:semver-major]
+      # typescript-eslint supports TypeScript <6.1.
+      - dependency-name: typescript
+        versions: [">=6.1.0"]
+      # Types track the Node 24 runtime (Vercel and CI).
+      - dependency-name: "@types/node"
+        versions: [">=25.0.0"]
 
   - package-ecosystem: github-actions
     directory: /
