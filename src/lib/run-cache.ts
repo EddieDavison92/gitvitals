@@ -1,10 +1,10 @@
-import type { ActionsRun, FailureDetail } from "./types";
+import type { ActionsRun, FailureDetail, RepoMeta } from "./types";
 
 const PREFIX = "gao:repo:";
 export const RECENT_REPOS_KEY = "gao:recent";
 const MAX_REPOS = 8;
 const MAX_RUNS = 1000;
-const VERSION = 1;
+export const CACHE_VERSION = 2;
 
 export type RepoCache = {
   version: number;
@@ -19,6 +19,8 @@ export type RepoCache = {
   truncated: boolean;
   /** Page cap in force when `truncated` was set; a larger cap (token added) warrants a refetch. */
   pageCap: number;
+  meta: RepoMeta | null;
+  metaFetchedAt: number;
 };
 
 export function repoKey(owner: string, repo: string) {
@@ -33,7 +35,7 @@ export function readCache(key: string): RepoCache | null {
   try {
     const raw = window.localStorage.getItem(PREFIX + key);
     const parsed = raw ? (JSON.parse(raw) as RepoCache) : null;
-    return parsed?.version === VERSION ? parsed : null;
+    return parsed?.version === CACHE_VERSION ? parsed : null;
   } catch {
     return null;
   }

@@ -59,29 +59,29 @@ export function TokenSettings() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-40 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-slate-200 bg-white p-4 text-slate-800 shadow-2xl shadow-slate-950/20">
-          <p className="text-sm font-semibold text-slate-950">GitHub token (optional)</p>
-          <p className="mt-1 text-xs leading-5 text-slate-500">
+        <div className="absolute right-0 top-full z-40 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-line bg-surface p-4 text-fg-2 shadow-2xl shadow-black/20">
+          <p className="text-sm font-semibold text-fg">GitHub token (optional)</p>
+          <p className="mt-1 text-xs leading-5 text-fg-muted">
             Without a token GitHub allows 60 requests an hour per IP. A token raises that to 5,000
             and lets you view private repos. It stays in this browser and is only sent to
             api.github.com.
           </p>
 
           {rateLimit && (
-            <p className={`mt-3 rounded-lg px-3 py-2 text-xs ${low ? "bg-amber-50 text-amber-800" : "bg-slate-50 text-slate-600"}`}>
+            <p className={`mt-3 rounded-lg px-3 py-2 text-xs ${low ? "bg-warn-soft text-warn-fg" : "bg-surface-2 text-fg-muted"}`}>
               {rateLimit.remaining} of {rateLimit.limit} requests left, resets at {formatReset(rateLimit.resetAt)}.
             </p>
           )}
 
           {token ? (
             <div className="mt-3 flex items-center justify-between gap-3">
-              <span className="font-mono text-xs text-slate-500">
+              <span className="font-mono text-xs text-fg-muted">
                 {token.slice(0, 11)}…{token.slice(-4)}
               </span>
               <button
                 type="button"
                 onClick={() => setToken(null)}
-                className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                className="rounded-lg border border-line px-3 py-1.5 text-xs font-semibold text-fg-muted hover:border-bad-line hover:bg-bad-soft hover:text-bad-fg"
               >
                 Remove
               </button>
@@ -105,21 +105,21 @@ export function TokenSettings() {
                 placeholder="github_pat_…"
                 autoComplete="off"
                 spellCheck={false}
-                className="h-9 w-full rounded-lg border border-slate-200 bg-slate-50 px-3 font-mono text-xs outline-none focus:border-sky-400 focus:bg-white focus:ring-2 focus:ring-sky-100"
+                className="h-9 w-full rounded-lg border border-line bg-surface-2 px-3 font-mono text-xs text-fg outline-none placeholder:text-fg-subtle focus:border-info focus:bg-surface focus:ring-2 focus:ring-info-soft"
               />
               <div className="flex items-center justify-between gap-3">
                 <a
                   href={NEW_TOKEN_URL}
                   target="_blank"
                   rel="noreferrer"
-                  className="text-xs font-medium text-sky-700 hover:text-sky-800"
+                  className="text-xs font-medium text-info-fg hover:underline"
                 >
                   Create a read-only token
                 </a>
                 <button
                   type="submit"
                   disabled={!draft.trim()}
-                  className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-40"
+                  className="rounded-lg bg-fg px-3 py-1.5 text-xs font-semibold text-surface disabled:opacity-40"
                 >
                   Save
                 </button>

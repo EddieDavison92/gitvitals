@@ -1,13 +1,132 @@
 @import "tailwindcss";
 
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * Semantic colour tokens. Components use these (bg-surface, text-fg-muted,
+ * bg-bad-soft …) rather than raw palette classes so dark mode is one switch.
+ * Status tones: ok = passed, bad = failed, warn = running/attention,
+ * info = accent, idle = skipped/cancelled/neutral.
+ */
 :root {
-  --background: #f4f6f9;
-  --foreground: #0f172a;
+  color-scheme: light;
+  --canvas: #f4f6f9;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --surface-3: #f1f5f9;
+  --line: #e2e8f0;
+  --line-soft: #f1f5f9;
+  --fg: #0f172a;
+  --fg-2: #334155;
+  --fg-muted: #64748b;
+  --fg-subtle: #94a3b8;
+  --chrome: #0b1220;
+
+  --ok: #10b981;
+  --ok-soft: #ecfdf5;
+  --ok-line: #a7f3d0;
+  --ok-fg: #047857;
+  --bad: #f43f5e;
+  --bad-soft: #fff1f2;
+  --bad-line: #fecdd3;
+  --bad-fg: #be123c;
+  --warn: #f59e0b;
+  --warn-soft: #fffbeb;
+  --warn-line: #fde68a;
+  --warn-fg: #b45309;
+  --info: #0ea5e9;
+  --info-soft: #f0f9ff;
+  --info-line: #bae6fd;
+  --info-fg: #0369a1;
+  --idle: #94a3b8;
+  --idle-soft: #f8fafc;
+  --idle-line: #e2e8f0;
+  --idle-fg: #475569;
+
+  --chart-grid: #e8edf3;
+  --chart-bar: #fecdd3;
+  --chart-line: #0284c7;
+  --chart-neutral: #334155;
+  --chart-p95: #94a3b8;
+  --shadow: rgb(2 6 23 / 0.04);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: #0a0e15;
+  --surface: #111722;
+  --surface-2: #151c29;
+  --surface-3: #1b2432;
+  --line: #243044;
+  --line-soft: #1a2231;
+  --fg: #e7edf6;
+  --fg-2: #c4cfdc;
+  --fg-muted: #8c99ac;
+  --fg-subtle: #5f6c80;
+  --chrome: #070a10;
+
+  --ok: #10b981;
+  --ok-soft: rgb(16 185 129 / 0.12);
+  --ok-line: rgb(16 185 129 / 0.3);
+  --ok-fg: #34d399;
+  --bad: #f43f5e;
+  --bad-soft: rgb(244 63 94 / 0.12);
+  --bad-line: rgb(244 63 94 / 0.32);
+  --bad-fg: #fb7185;
+  --warn: #f59e0b;
+  --warn-soft: rgb(245 158 11 / 0.12);
+  --warn-line: rgb(245 158 11 / 0.3);
+  --warn-fg: #fbbf24;
+  --info: #0ea5e9;
+  --info-soft: rgb(14 165 233 / 0.12);
+  --info-line: rgb(14 165 233 / 0.3);
+  --info-fg: #38bdf8;
+  --idle: #64748b;
+  --idle-soft: rgb(148 163 184 / 0.1);
+  --idle-line: rgb(148 163 184 / 0.22);
+  --idle-fg: #94a3b8;
+
+  --chart-grid: #1f2937;
+  --chart-bar: rgb(244 63 94 / 0.45);
+  --chart-line: #38bdf8;
+  --chart-neutral: #94a3b8;
+  --chart-p95: #475569;
+  --shadow: rgb(0 0 0 / 0.3);
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--line);
+  --color-line-soft: var(--line-soft);
+  --color-fg: var(--fg);
+  --color-fg-2: var(--fg-2);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-chrome: var(--chrome);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-ok-line: var(--ok-line);
+  --color-ok-fg: var(--ok-fg);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-bad-line: var(--bad-line);
+  --color-bad-fg: var(--bad-fg);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-line: var(--warn-line);
+  --color-warn-fg: var(--warn-fg);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-info-line: var(--info-line);
+  --color-info-fg: var(--info-fg);
+  --color-idle: var(--idle);
+  --color-idle-soft: var(--idle-soft);
+  --color-idle-line: var(--idle-line);
+  --color-idle-fg: var(--idle-fg);
+  --shadow-card: 0 1px 2px 0 var(--shadow);
   --font-sans: var(--font-space-grotesk);
   --font-mono: var(--font-jetbrains-mono);
 }
@@ -19,8 +138,8 @@
 body {
   min-height: 100vh;
   margin: 0;
-  background: var(--background);
-  color: var(--foreground);
+  background: var(--canvas);
+  color: var(--fg);
   font-family: var(--font-space-grotesk), sans-serif;
 }
 
@@ -35,7 +154,34 @@ select {
   cursor: pointer;
 }
 
+:focus-visible {
+  outline: 2px solid var(--info);
+  outline-offset: 2px;
+}
+
 ::selection {
   background: #bae6fd;
   color: #0c4a6e;
+}
+
+@keyframes drawer-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

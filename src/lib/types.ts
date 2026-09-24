@@ -45,6 +45,53 @@ export type ActionsHistoryResponse = {
   runs: ActionsRun[];
 };
 
+export type RepoMeta = {
+  fullName: string;
+  description: string | null;
+  defaultBranch: string;
+  isPrivate: boolean;
+  isArchived: boolean;
+  stars: number;
+  avatarUrl: string;
+  htmlUrl: string;
+};
+
+export type JobStep = {
+  name: string;
+  number: number;
+  status: RunStatus;
+  conclusion: RunConclusion;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
+export type RunJob = {
+  id: number;
+  name: string;
+  status: RunStatus;
+  conclusion: RunConclusion;
+  url: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  runnerName: string | null;
+  labels: string[];
+  steps: JobStep[];
+};
+
+export type Annotation = {
+  level: "notice" | "warning" | "failure";
+  message: string;
+  title: string | null;
+  /** `path:line`, or null for annotations not tied to a file. */
+  location: string | null;
+};
+
+export type RunJobs = {
+  jobs: RunJob[];
+  /** Keyed by job id; only fetched for failed jobs. */
+  annotations: Record<number, Annotation[]>;
+};
+
 export type RateLimit = {
   limit: number;
   remaining: number;

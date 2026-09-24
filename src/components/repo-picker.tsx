@@ -45,11 +45,11 @@ export function RepoPicker({ variant = "hero" }: { variant?: "hero" | "compact" 
   return (
     <form onSubmit={submit}>
       <div
-        className={`flex items-center gap-2 rounded-2xl border bg-white p-2 shadow-lg shadow-slate-950/[0.06] transition focus-within:ring-4 ${
-          invalid ? "border-rose-300 focus-within:ring-rose-100" : "border-slate-200 focus-within:border-sky-300 focus-within:ring-sky-100"
+        className={`flex items-center gap-2 rounded-2xl border bg-surface p-2 shadow-lg shadow-black/[0.06] transition focus-within:ring-4 ${
+          invalid ? "border-bad-line focus-within:ring-bad-soft" : "border-line focus-within:border-info focus-within:ring-info-soft"
         }`}
       >
-        <span className="pl-2 font-mono text-sm text-slate-400">github.com/</span>
+        <span className="pl-2 font-mono text-sm text-fg-subtle">github.com/</span>
         <input
           value={value}
           onChange={(event) => {
@@ -61,17 +61,17 @@ export function RepoPicker({ variant = "hero" }: { variant?: "hero" | "compact" 
           aria-invalid={invalid}
           autoFocus
           spellCheck={false}
-          className="h-10 min-w-0 flex-1 bg-transparent font-mono text-sm text-slate-900 outline-none placeholder:text-slate-300"
+          className="h-10 min-w-0 flex-1 bg-transparent font-mono text-sm text-fg outline-none placeholder:text-fg-subtle"
         />
         <button
           type="submit"
-          className="h-10 shrink-0 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-800"
+          className="h-10 shrink-0 rounded-xl bg-fg px-4 text-sm font-semibold text-surface transition hover:opacity-90"
         >
           View runs
         </button>
       </div>
       {invalid && (
-        <p className="mt-2 pl-2 text-xs text-rose-600">
+        <p className="mt-2 pl-2 text-xs text-bad-fg">
           Enter a repo as owner/repo or paste its GitHub URL.
         </p>
       )}

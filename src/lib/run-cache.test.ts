@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mergeRuns, readCache, repoKey, writeCache, type RepoCache } from "./run-cache";
+import { CACHE_VERSION, mergeRuns, readCache, repoKey, writeCache, type RepoCache } from "./run-cache";
 import { makeRun } from "./test-fixtures";
 
 describe("mergeRuns", () => {
@@ -38,7 +38,9 @@ describe("writeCache", () => {
   });
 
   const cache = (runs = [makeRun()]): RepoCache => ({
-    version: 1,
+    version: CACHE_VERSION,
+    meta: null,
+    metaFetchedAt: 0,
     runs,
     details: {},
     fetchedAt: 0,

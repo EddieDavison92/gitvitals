@@ -104,6 +104,12 @@ describe("fetchFailureDetail", () => {
     expect((await fetchFailureDetail(get, "o", "r", failedRun)).summary).toBe('test: Step "Run tests" failed.');
   });
 
+  it("explains the failed job, not a sibling cancelled because of it", async () => {
+    const cancelled = { ...failedJob, id: 98, name: "build", conclusion: "cancelled", steps: [] };
+    const { get } = detailFetcher([cancelled, failedJob]);
+    expect((await fetchFailureDetail(get, "o", "r", failedRun)).summary).toBe('test: Step "Run tests" failed.');
+  });
+
   it("skips annotations for cancelled jobs", async () => {
     const { get, paths } = detailFetcher([{ ...failedJob, conclusion: "cancelled", steps: [] }]);
     expect((await fetchFailureDetail(get, "o", "r", failedRun)).summary).toBe("test: Cancelled.");

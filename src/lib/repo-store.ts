@@ -1,35 +1,59 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   createFetcher,
   failureConclusions,
   fetchFailureDetail,
   fetchRateLimit,
+  fetchRepoMeta,
+  fetchRun,
+  fetchRunJobs,
   fetchRuns,
   GitHubError,
+  summarizeFailure,
+  type Fetcher,
 } from "./github";
 import { getFetchSince, type PeriodFilter } from "./periods";
-import { detailKey, mergeRuns, readCache, repoKey, writeCache, type RepoCache } from "./run-cache";
+import { CACHE_VERSION, detailKey, mergeRuns, readCache, repoKey, writeCache, type RepoCache } from "./run-cache";
+import { isActiveRun, isFailedRun, isLiveRun } from "./run-status";
 import { useToken } from "./token-store";
 import { useHydrated } from "./use-hydrated";
-import type { ActionsRun, RateLimit } from "./types";
+import type { ActionsRun, FailureDetail, RateLimit, RunJobs } from "./types";
 
 /**
  * Request budgets. Anonymous visitors get 60 requests/hour per IP, so they load
- * fewer pages, refresh less often and keep a reserve for refreshes. GitHub
- * returns at most 1,000 runs (10 pages) for date-filtered queries.
+ * fewer pages, refresh less often and keep a reserve. GitHub returns at most
+ * 1,000 runs (10 pages) for date-filtered queries.
+ *
+ * While runs are queued or in progress the dashboard polls faster (`liveRefreshMs`).
+ * Anonymous fast polling stops once fewer than `liveReserve` requests remain.
  */
 const BUDGET = {
-  anonymous: { maxPages: 3, refreshPages: 1, refreshMs: 5 * 60_000, detailReserve: 12 },
-  token: { maxPages: 10, refreshPages: 5, refreshMs: 60_000, detailReserve: 100 },
+  anonymous: {
+    maxPages: 3,
+    refreshPages: 1,
+    refreshMs: 5 * 60_000,
+    liveRefreshMs: 60_000,
+    liveReserve: 20,
+    detailReserve: 12,
+  },
+  token: {
+    maxPages: 10,
+    refreshPages: 5,
+    refreshMs: 60_000,
+    liveRefreshMs: 15_000,
+    liveReserve: 200,
+    detailReserve: 100,
+  },
 };
 
-/** In-progress runs older than this are treated as stuck and no longer re-polled. */
-const ACTIVE_WINDOW_MS = 24 * 60 * 60_000;
 /** Overlap when refreshing so runs created during the last fetch aren't missed. */
 const REFRESH_OVERLAP_MS = 10 * 60_000;
+const META_MAX_AGE_MS = 24 * 60 * 60_000;
 const DETAIL_CONCURRENCY = 4;
+/** The run drawer shows annotations for up to this many failed jobs. */
+const DRAWER_ANNOTATED_JOBS = 5;
 
 export function budgetFor(token: string | null) {
   return token ? BUDGET.token : BUDGET.anonymous;
@@ -41,7 +65,7 @@ export type LoadError =
   | { kind: "rate_limited"; resetAt: number }
   | { kind: "other"; message: string };
 
-function toLoadError(error: unknown): LoadError {
+export function toLoadError(error: unknown): LoadError {
   if (error instanceof GitHubError) {
     if (error.isRateLimited) return { kind: "rate_limited", resetAt: error.rateLimit?.resetAt ?? Date.now() };
     if (error.status === 404) return { kind: "not_found" };
@@ -60,6 +84,7 @@ function setRateLimit(next: RateLimit) {
   rateLimitListeners.forEach((listener) => listener());
 }
 
+/** Current rate limit; refreshed from the free /rate_limit endpoint when the token changes. */
 export function useRateLimit() {
   const token = useToken();
   const hydrated = useHydrated();
@@ -82,6 +107,20 @@ type StoreState = {
   error: LoadError | null;
 };
 
+function emptyCache(): RepoCache {
+  return {
+    version: CACHE_VERSION,
+    runs: [],
+    details: {},
+    fetchedAt: 0,
+    coveredSince: null,
+    truncated: false,
+    pageCap: 0,
+    meta: null,
+    metaFetchedAt: 0,
+  };
+}
+
 class RepoStore {
   private state: StoreState = { cache: null, loading: false, error: null };
   private hydrated = false;
@@ -91,6 +130,7 @@ class RepoStore {
   private lastToken: string | null | undefined = undefined;
   private detailsInFlight = new Set<string>();
   private detailsFailed = new Set<string>();
+  private jobsCache = new Map<string, RunJobs>();
 
   constructor(
     readonly owner: string,
@@ -120,6 +160,10 @@ class RepoStore {
     this.listeners.forEach((listener) => listener());
   }
 
+  private updateCache(update: (cache: RepoCache) => RepoCache) {
+    this.set({ cache: update(this.state.cache ?? emptyCache()) }, true);
+  }
+
   private enqueue(operation: () => Promise<void>) {
     this.queue = this.queue.then(operation, operation);
     return this.queue;
@@ -129,13 +173,30 @@ class RepoStore {
     return this.state.error?.kind === "rate_limited" && Date.now() < this.state.error.resetAt;
   }
 
-  private async run(token: string | null, operation: (get: ReturnType<typeof createFetcher>) => Promise<Partial<StoreState>>) {
+  private async run(
+    token: string | null,
+    operation: (get: Fetcher) => Promise<Partial<StoreState>>,
+    { revalidate = false } = {},
+  ) {
     this.set({ loading: true });
     try {
-      const patch = await operation(createFetcher(token, setRateLimit));
+      const patch = await operation(createFetcher(token, setRateLimit, { revalidate }));
       this.set({ ...patch, loading: false, error: null }, true);
     } catch (error) {
       this.set({ loading: false, error: toLoadError(error) });
+    }
+  }
+
+  /** Repo metadata, refetched daily; failures keep whatever was cached. */
+  private async metaFor(get: Fetcher) {
+    const cache = this.state.cache;
+    if (cache?.meta && Date.now() - cache.metaFetchedAt < META_MAX_AGE_MS) {
+      return { meta: cache.meta, metaFetchedAt: cache.metaFetchedAt };
+    }
+    try {
+      return { meta: await fetchRepoMeta(get, this.owner, this.repo), metaFetchedAt: Date.now() };
+    } catch {
+      return { meta: cache?.meta ?? null, metaFetchedAt: cache?.metaFetchedAt ?? 0 };
     }
   }
 
@@ -152,6 +213,7 @@ class RepoStore {
 
       const covered =
         cache !== null &&
+        cache.pageCap > 0 &&
         (cache.coveredSince === null ||
           (since !== null && cache.coveredSince <= since) ||
           (cache.truncated && cache.pageCap >= budget.maxPages));
@@ -173,17 +235,29 @@ class RepoStore {
     });
   }
 
+  /** Delay until the next automatic refresh: faster while runs are live. */
+  nextRefreshDelay(token: string | null) {
+    const budget = budgetFor(token);
+    const cache = this.state.cache;
+    const live =
+      cache?.runs.some((run) => isLiveRun(run, cache.fetchedAt)) &&
+      (token !== null || (rateLimit?.remaining ?? budget.liveReserve + 1) > budget.liveReserve);
+    const interval = live ? budget.liveRefreshMs : budget.refreshMs;
+    const age = Date.now() - (cache?.fetchedAt ?? 0);
+    return Math.max(1_000, interval - age);
+  }
+
   private fullFetch(since: string | null, token: string | null) {
     const { maxPages } = budgetFor(token);
     return this.run(token, async (get) => {
-      // Show each page as it lands; busy repos take a few seconds to page through.
+      const metaPromise = this.metaFor(get);
+      // Show each batch as it lands; busy repos take a few seconds to page through.
       const showPartial = (runsSoFar: ActionsRun[]) => {
-        const current = this.state.cache;
+        const current = this.state.cache ?? emptyCache();
         this.set({
           cache: {
-            version: 1,
-            runs: mergeRuns(current?.runs ?? [], runsSoFar),
-            details: current?.details ?? {},
+            ...current,
+            runs: mergeRuns(current.runs, runsSoFar),
             fetchedAt: Date.now(),
             coveredSince: runsSoFar.at(-1)?.createdAt ?? since,
             truncated: false,
@@ -192,12 +266,13 @@ class RepoStore {
         });
       };
       const result = await fetchRuns(get, this.owner, this.repo, since, maxPages, showPartial);
-      const previous = this.state.cache;
+      const meta = await metaPromise;
+      const previous = this.state.cache ?? emptyCache();
       return {
         cache: {
-          version: 1,
-          runs: mergeRuns(previous?.runs ?? [], result.runs),
-          details: previous?.details ?? {},
+          ...previous,
+          ...meta,
+          runs: mergeRuns(previous.runs, result.runs),
           fetchedAt: Date.now(),
           coveredSince: result.truncated ? (result.runs.at(-1)?.createdAt ?? since) : since,
           truncated: result.truncated,
@@ -214,32 +289,66 @@ class RepoStore {
       return;
     }
 
+    // Stable while nothing changes, so revalidation can return 304.
     const now = Date.now();
     let since = new Date(new Date(cache.runs[0].createdAt).getTime() - REFRESH_OVERLAP_MS).toISOString();
     for (const run of cache.runs) {
-      if (run.status !== "completed" && now - new Date(run.createdAt).getTime() < ACTIVE_WINDOW_MS && run.createdAt < since) {
-        since = run.createdAt;
-      }
+      if (isLiveRun(run, now) && run.createdAt < since) since = run.createdAt;
     }
 
     const { refreshPages } = budgetFor(token);
     let gap = false;
-    await this.run(token, async (get) => {
-      const result = await fetchRuns(get, this.owner, this.repo, since, refreshPages);
-      // More new runs than one refresh can page through leaves a hole in coverage.
-      gap = result.truncated;
-      const latest = this.state.cache ?? cache;
-      return {
-        cache: {
-          ...latest,
-          runs: mergeRuns(latest.runs, result.runs),
-          fetchedAt: Date.now(),
-          coveredSince: gap ? (result.runs.at(-1)?.createdAt ?? since) : latest.coveredSince,
-          truncated: gap ? false : latest.truncated,
-        },
-      };
-    });
+    await this.run(
+      token,
+      async (get) => {
+        const [result, meta] = await Promise.all([
+          fetchRuns(get, this.owner, this.repo, since, refreshPages),
+          this.metaFor(get),
+        ]);
+        // More new runs than one refresh can page through leaves a hole in coverage.
+        gap = result.truncated;
+        const latest = this.state.cache ?? cache;
+        return {
+          cache: {
+            ...latest,
+            ...meta,
+            runs: mergeRuns(latest.runs, result.runs),
+            fetchedAt: Date.now(),
+            coveredSince: gap ? (result.runs.at(-1)?.createdAt ?? since) : latest.coveredSince,
+            truncated: gap ? false : latest.truncated,
+          },
+        };
+      },
+      { revalidate: true },
+    );
     if (gap) await this.fullFetch(getFetchSince(this.period), token);
+  }
+
+  /** Fetches a single run (e.g. from a shared link) and merges it into the cache. */
+  async loadRun(runId: number, token: string | null) {
+    const get = createFetcher(token, setRateLimit);
+    const run = await fetchRun(get, this.owner, this.repo, runId);
+    this.updateCache((cache) => ({ ...cache, runs: mergeRuns(cache.runs, [run]) }));
+    return run;
+  }
+
+  setDetail(run: ActionsRun, detail: FailureDetail) {
+    this.updateCache((cache) => ({ ...cache, details: { ...cache.details, [detailKey(run)]: detail } }));
+  }
+
+  /** Jobs and failure annotations for a run; cached once the run has finished. */
+  async runJobs(run: ActionsRun, token: string | null) {
+    const key = detailKey(run);
+    const cached = this.jobsCache.get(key);
+    if (cached) return cached;
+
+    const get = createFetcher(token, setRateLimit, { revalidate: isActiveRun(run) });
+    const jobs = await fetchRunJobs(get, this.owner, this.repo, run, DRAWER_ANNOTATED_JOBS);
+    if (!isActiveRun(run)) {
+      this.jobsCache.set(key, jobs);
+      if (isFailedRun(run) && !this.state.cache?.details[key]) this.setDetail(run, summarizeFailure(run, jobs));
+    }
+    return jobs;
   }
 
   /** Loads failure summaries for failed runs, stopping before the request reserve is spent. */
@@ -265,9 +374,7 @@ class RepoStore {
         const key = detailKey(run);
         this.detailsInFlight.add(key);
         try {
-          const detail = await fetchFailureDetail(get, this.owner, this.repo, run);
-          const cache = this.state.cache;
-          if (cache) this.set({ cache: { ...cache, details: { ...cache.details, [key]: detail } } }, true);
+          this.setDetail(run, await fetchFailureDetail(get, this.owner, this.repo, run));
         } catch (error) {
           this.detailsFailed.add(key);
           if (error instanceof GitHubError && error.isRateLimited) {
@@ -308,45 +415,95 @@ export function useRepoRuns(owner: string, repo: string, period: PeriodFilter) {
     if (hydrated) store.load(period, token);
   }, [hydrated, store, period, token]);
 
+  // Self-scheduling so the interval can speed up while runs are live.
   useEffect(() => {
     if (!hydrated) return;
-    const { refreshMs } = budgetFor(token);
-    const refreshIfStale = () => {
-      const fetchedAt = store.getSnapshot().cache?.fetchedAt ?? 0;
-      if (document.visibilityState === "visible" && Date.now() - fetchedAt >= refreshMs - 1000) {
-        store.refresh(token);
-      }
+    let cancelled = false;
+    let timer: number | undefined;
+    const schedule = () => {
+      if (!cancelled) timer = window.setTimeout(tick, store.nextRefreshDelay(token));
     };
-    const interval = window.setInterval(refreshIfStale, refreshMs);
-    document.addEventListener("visibilitychange", refreshIfStale);
+    const tick = async () => {
+      if (document.visibilityState === "visible") await store.refresh(token);
+      schedule();
+    };
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      window.clearTimeout(timer);
+      schedule();
+    };
+    schedule();
+    document.addEventListener("visibilitychange", onVisible);
     return () => {
-      window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", refreshIfStale);
+      cancelled = true;
+      window.clearTimeout(timer);
+      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [hydrated, store, token]);
 
+  const cache = state.cache;
   const runs = useMemo(() => {
-    const cache = state.cache;
-    if (!cache) return null;
+    if (!cache || cache.pageCap === 0) return null;
     return cache.runs.map((run) => {
       const detail = cache.details[detailKey(run)];
       return detail ? { ...run, failureSummary: detail.summary, failurePoints: detail.points } : run;
     });
-  }, [state.cache]);
+  }, [cache]);
+  const liveCount = useMemo(
+    () => (cache ? cache.runs.filter((run) => isLiveRun(run, cache.fetchedAt)).length : 0),
+    [cache],
+  );
 
   const refresh = useCallback(() => store.refresh(token), [store, token]);
   const enrich = useCallback((target: ActionsRun[]) => store.enrich(target, token), [store, token]);
+  const loadRun = useCallback((runId: number) => store.loadRun(runId, token), [store, token]);
+  const budget = budgetFor(token);
 
   return {
     runs,
-    fetchedAt: state.cache?.fetchedAt ?? null,
-    truncated: state.cache?.truncated ?? false,
-    coveredSince: state.cache?.coveredSince ?? null,
-    refreshMs: budgetFor(token).refreshMs,
+    meta: cache?.meta ?? null,
+    fetchedAt: cache?.fetchedAt || null,
+    truncated: cache?.truncated ?? false,
+    coveredSince: cache?.coveredSince ?? null,
+    liveCount,
+    refreshMs: liveCount > 0 ? budget.liveRefreshMs : budget.refreshMs,
     loading: state.loading,
     error: state.error,
     hasToken: token !== null,
     refresh,
     enrich,
+    loadRun,
+  };
+}
+
+type JobsState = { key: string; jobs: RunJobs | null; error: LoadError | null };
+
+/** Jobs for the run shown in the drawer; re-fetched when an active run updates. */
+export function useRunJobs(owner: string, repo: string, run: ActionsRun | null) {
+  const token = useToken();
+  const store = useMemo(() => getStore(owner, repo), [owner, repo]);
+  const requestKey = run ? `${detailKey(run)}:${run.updatedAt}` : "";
+  const [state, setState] = useState<JobsState>({ key: "", jobs: null, error: null });
+
+  useEffect(() => {
+    if (!run) return;
+    let cancelled = false;
+    store.runJobs(run, token).then(
+      (jobs) => !cancelled && setState({ key: requestKey, jobs, error: null }),
+      (error) => !cancelled && setState({ key: requestKey, jobs: null, error: toLoadError(error) }),
+    );
+    return () => {
+      cancelled = true;
+    };
+    // requestKey captures the parts of `run` that matter.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [store, token, requestKey]);
+
+  // Keep showing the previous jobs while an active run's update loads.
+  const sameRun = run !== null && state.key.startsWith(`${detailKey(run)}:`);
+  return {
+    jobs: sameRun ? state.jobs : null,
+    error: sameRun ? state.error : null,
+    loading: state.key !== requestKey,
   };
 }
