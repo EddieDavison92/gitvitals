@@ -42,6 +42,10 @@ Defined in `BUDGET` in `src/lib/repo-store.ts`:
 
 ## Validation checklist
 
+CI (`.github/workflows/ci.yml`) runs these on every PR; `main` requires it to pass.
+
 - `npm run lint`
+- `npm run typecheck`
+- `npm test` (Vitest; tests sit next to the code as `*.test.ts`)
 - `npm run build`
 - Load a busy public repo (e.g. `cli/cli`) anonymously and confirm the request count stays near 10.
