@@ -14,12 +14,8 @@ import {
 } from "recharts";
 import { formatDuration, formatDurationAxis, formatShortDate } from "@/lib/format";
 import type { DayStat, WorkflowStat } from "@/lib/stats";
-import { Card, Eyebrow } from "./ui";
-
-const ANIMATION_MS = 180;
-const TICK = { fontSize: 11, fill: "var(--fg-subtle)" };
-const GRID = { strokeDasharray: "3 3", stroke: "var(--chart-grid)" };
-const TOOLTIP = "rounded-xl border border-line bg-surface px-3 py-2 text-xs shadow-xl shadow-black/10";
+import { CHART_ANIMATION_MS as ANIMATION_MS, ChartCard, CURSOR, EmptyChart, GRID, TICK, TOOLTIP, type TooltipProps } from "@/components/ui/charts";
+import { Eyebrow } from "@/components/ui/primitives";
 
 export function Trends({ daily, workflows }: { daily: DayStat[]; workflows: WorkflowStat[] }) {
   const busiest = [...workflows].sort((a, b) => b.runs - a.runs).slice(0, 6);
@@ -40,7 +36,7 @@ export function Trends({ daily, workflows }: { daily: DayStat[]; workflows: Work
                 <XAxis dataKey="day" tickFormatter={formatShortDate} tick={TICK} axisLine={false} tickLine={false} minTickGap={26} />
                 <YAxis yAxisId="rate" domain={[0, 100]} tickFormatter={(value) => `${value}%`} tick={TICK} axisLine={false} tickLine={false} />
                 <YAxis yAxisId="failures" orientation="right" allowDecimals={false} tick={TICK} axisLine={false} tickLine={false} width={24} />
-                <Tooltip content={<ReliabilityTooltip />} cursor={{ fill: "var(--surface-3)" }} />
+                <Tooltip content={<ReliabilityTooltip />} cursor={CURSOR} />
                 <Bar yAxisId="failures" dataKey="failed" fill="var(--chart-bar)" radius={[4, 4, 0, 0]} maxBarSize={18} animationDuration={ANIMATION_MS} />
                 <Line
                   yAxisId="rate"
@@ -56,7 +52,7 @@ export function Trends({ daily, workflows }: { daily: DayStat[]; workflows: Work
               </ComposedChart>
             </ResponsiveContainer>
           ) : (
-            <EmptyChart />
+            <EmptyChart>No completed runs to chart.</EmptyChart>
           )}
         </ChartCard>
 
@@ -80,7 +76,7 @@ export function Trends({ daily, workflows }: { daily: DayStat[]; workflows: Work
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <EmptyChart />
+            <EmptyChart>No completed runs to chart.</EmptyChart>
           )}
         </ChartCard>
 
@@ -98,7 +94,7 @@ export function Trends({ daily, workflows }: { daily: DayStat[]; workflows: Work
                 </LineChart>
               </ResponsiveContainer>
             ) : (
-              <EmptyChart height={220} />
+              <EmptyChart height={220}>No completed runs to chart.</EmptyChart>
             )}
           </ChartCard>
         </div>
@@ -106,28 +102,6 @@ export function Trends({ daily, workflows }: { daily: DayStat[]; workflows: Work
     </section>
   );
 }
-
-function ChartCard({ title, description, children }: { title: string; description: string; children: React.ReactNode }) {
-  return (
-    <Card>
-      <div className="border-b border-line-soft px-4 py-4 sm:px-5">
-        <h3 className="text-sm font-semibold text-fg">{title}</h3>
-        <p className="mt-0.5 text-xs text-fg-muted">{description}</p>
-      </div>
-      <div className="px-2 pb-3 pt-1 sm:px-4">{children}</div>
-    </Card>
-  );
-}
-
-function EmptyChart({ height = 260 }: { height?: number }) {
-  return (
-    <div className="grid place-items-center text-sm text-fg-subtle" style={{ height }}>
-      No completed runs to chart.
-    </div>
-  );
-}
-
-type TooltipProps<T> = { active?: boolean; payload?: Array<{ payload: T }>; label?: string };
 
 function ReliabilityTooltip({ active, payload, label }: TooltipProps<DayStat>) {
   const day = payload?.[0]?.payload;

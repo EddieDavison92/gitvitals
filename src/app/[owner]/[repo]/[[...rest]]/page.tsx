@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { ActionsDashboard } from "@/components/dashboard/dashboard";
+import { RepoShell } from "@/components/repo/repo-shell";
 import { parseDashboardState } from "@/lib/dashboard-state";
 import { isValidRepo } from "@/lib/parse-repo";
+import { resolveRepoPath, TABS } from "@/lib/routes";
 
 type Props = {
   params: Promise<{ owner: string; repo: string; rest?: string[] }>;
@@ -10,9 +11,11 @@ type Props = {
 };
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
-  const { owner, repo } = await params;
-  const title = `${owner}/${repo} · Actions observability`;
-  const description = `GitHub Actions success rate, failures and durations for ${owner}/${repo}.`;
+  const { owner, repo, rest } = await params;
+  const { tab } = resolveRepoPath(rest);
+  const section = tab === "overview" ? "" : ` · ${TABS.find((item) => item.tab === tab)?.label}`;
+  const title = `${owner}/${repo}${section} · gitvitals`;
+  const description = `Activity, pull requests, issues, releases and CI health for ${owner}/${repo}.`;
   return {
     title,
     description,
@@ -26,18 +29,16 @@ export default async function RepoPage({ params, searchParams }: Props) {
   const cleanRepo = repo.replace(/\.git$/i, "");
   if (!isValidRepo(owner, cleanRepo)) notFound();
 
-  // Pasted GitHub paths land on the dashboard; a run link opens that run.
-  if (rest?.length || cleanRepo !== repo) {
-    const runId = rest?.[0] === "actions" && rest[1] === "runs" && /^\d+$/.test(rest[2] ?? "") ? rest[2] : null;
-    redirect(`/${owner}/${cleanRepo}${runId ? `?run=${runId}` : ""}`);
-  }
+  const { tab, redirect: target } = resolveRepoPath(rest);
+  if (target !== null || cleanRepo !== repo) redirect(`/${owner}/${cleanRepo}${target ?? ""}`);
 
   return (
-    <ActionsDashboard
+    <RepoShell
       key={`${owner}/${repo}`.toLowerCase()}
       owner={owner}
       repo={repo}
-      initialState={parseDashboardState(await searchParams)}
+      tab={tab}
+      actionsState={parseDashboardState(tab === "actions" ? await searchParams : {})}
     />
   );
 }

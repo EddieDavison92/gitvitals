@@ -38,20 +38,28 @@ export type FailureDetail = {
   points: string[];
 };
 
-export type ActionsHistoryResponse = {
-  owner: string;
-  repo: string;
-  generatedAt: string | null;
-  runs: ActionsRun[];
-};
-
 export type RepoMeta = {
   fullName: string;
   description: string | null;
   defaultBranch: string;
   isPrivate: boolean;
   isArchived: boolean;
+  isFork: boolean;
+  parent: string | null;
   stars: number;
+  forks: number;
+  watchers: number;
+  /** Open issues plus open pull requests, as GitHub counts them. */
+  openIssuesAndPulls: number;
+  language: string | null;
+  license: string | null;
+  topics: string[];
+  homepage: string | null;
+  createdAt: string;
+  pushedAt: string;
+  hasIssues: boolean;
+  /** True when the current token can push; unlocks traffic stats. */
+  canPush: boolean;
   avatarUrl: string;
   htmlUrl: string;
 };

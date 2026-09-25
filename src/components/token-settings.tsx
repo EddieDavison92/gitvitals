@@ -1,11 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useRateLimit } from "@/lib/repo-store";
+import { useRateLimits } from "@/lib/rate-limit";
 import { setToken, useToken } from "@/lib/token-store";
 
 const NEW_TOKEN_URL =
-  "https://github.com/settings/personal-access-tokens/new?name=gh-actions-observability&actions=read";
+  "https://github.com/settings/personal-access-tokens/new?name=gitvitals&description=Read-only%20access%20for%20gitvitals&actions=read&contents=read&issues=read&pull_requests=read&metadata=read";
 
 function formatReset(resetAt: number) {
   return new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit" }).format(new Date(resetAt));
@@ -14,7 +14,7 @@ function formatReset(resetAt: number) {
 /** Header button with a popover for the optional GitHub token and the current rate limit. */
 export function TokenSettings() {
   const token = useToken();
-  const rateLimit = useRateLimit();
+  const { core: rateLimit, search } = useRateLimits();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const panelRef = useRef<HTMLDivElement>(null);
@@ -62,14 +62,19 @@ export function TokenSettings() {
         <div className="absolute right-0 top-full z-40 mt-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-line bg-surface p-4 text-fg-2 shadow-2xl shadow-black/20">
           <p className="text-sm font-semibold text-fg">GitHub token (optional)</p>
           <p className="mt-1 text-xs leading-5 text-fg-muted">
-            Without a token GitHub allows 60 requests an hour per IP. A token raises that to 5,000
-            and lets you view private repos. It stays in this browser and is only sent to
-            api.github.com.
+            Without a token GitHub allows 60 requests an hour per IP. A token raises that to 5,000,
+            loads more history and unlocks private repos and traffic stats for repos you can push
+            to. It stays in this browser and is only sent to api.github.com.
           </p>
 
           {rateLimit && (
             <p className={`mt-3 rounded-lg px-3 py-2 text-xs ${low ? "bg-warn-soft text-warn-fg" : "bg-surface-2 text-fg-muted"}`}>
-              {rateLimit.remaining} of {rateLimit.limit} requests left, resets at {formatReset(rateLimit.resetAt)}.
+              {rateLimit.remaining} of {rateLimit.limit} requests left this hour, resets at {formatReset(rateLimit.resetAt)}.
+              {search && (
+                <span className="mt-0.5 block text-fg-subtle">
+                  Search: {search.remaining} of {search.limit} left this minute.
+                </span>
+              )}
             </p>
           )}
 

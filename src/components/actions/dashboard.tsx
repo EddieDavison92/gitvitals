@@ -8,16 +8,15 @@ import { getPeriodMs, PERIOD_OPTIONS } from "@/lib/periods";
 import { toLoadError, useRepoRuns, type LoadError } from "@/lib/repo-store";
 import { isFailedRun } from "@/lib/run-status";
 import { branchHealth, dailyTrend, inferDefaultBranch, summarizeRuns, workflowStats } from "@/lib/stats";
-import type { ActionsRun } from "@/lib/types";
-import { DashboardHeader } from "./header";
+import type { ActionsRun, RepoMeta } from "@/lib/types";
 import { Overview } from "./overview";
 import { RecentFailures, ReliabilityWatch } from "./panels";
 import { RunDrawer } from "./run-drawer";
 import { RunExplorer, runMatchesView } from "./run-explorer";
-import { describeError, ErrorPage, LoadingDashboard } from "./states";
+import { ActionsError, ActionsLoading, describeError } from "./states";
 import { Toolbar } from "./toolbar";
 import { Trends } from "./trends";
-import { EmptyState } from "./ui";
+import { EmptyState } from "@/components/ui/primitives";
 import { useDashboardState } from "./use-dashboard-state";
 
 const PAGE_SIZE = 25;
@@ -31,10 +30,12 @@ function uniqueSorted<T>(values: T[], compare: (a: T, b: T) => number) {
 export function ActionsDashboard({
   owner,
   repo,
+  meta,
   initialState,
 }: {
   owner: string;
   repo: string;
+  meta: RepoMeta | null;
   initialState: DashboardState;
 }) {
   const [state, update] = useDashboardState(initialState);
@@ -45,7 +46,6 @@ export function ActionsDashboard({
 
   const {
     runs: loadedRuns,
-    meta,
     fetchedAt,
     truncated,
     coveredSince,
@@ -188,21 +188,8 @@ export function ActionsDashboard({
     setShowAllFailures(false);
   };
 
-  const header = (
-    <DashboardHeader
-      owner={owner}
-      repo={repo}
-      meta={meta}
-      fetchedAt={fetchedAt}
-      loading={loading}
-      liveCount={liveCount}
-      refreshMs={refreshMs}
-      onRefresh={refresh}
-    />
-  );
-
   if (!loadedRuns) {
-    return error ? <ErrorPage header={header} error={error} owner={owner} repo={repo} /> : <LoadingDashboard header={header} />;
+    return error ? <ActionsError error={error} /> : <ActionsLoading />;
   }
 
   const periodLabel = PERIOD_OPTIONS.find((option) => option.value === state.period)?.label ?? "";
@@ -219,9 +206,14 @@ export function ActionsDashboard({
     ) : null;
 
   return (
-    <main className="min-h-screen bg-canvas text-fg">
-      {header}
-      <Toolbar state={{ ...state, ...filters }} update={update} options={options} onClear={clearFilters} />
+    <>
+      <Toolbar
+        state={{ ...state, ...filters }}
+        update={update}
+        options={options}
+        onClear={clearFilters}
+        status={{ fetchedAt, loading, liveCount, refreshMs, onRefresh: refresh }}
+      />
 
       <div className="mx-auto max-w-[1480px] space-y-6 px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
         {error && (
@@ -309,7 +301,7 @@ export function ActionsDashboard({
         </footer>
       </div>
       {drawer}
-    </main>
+    </>
   );
 }
 

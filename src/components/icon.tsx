@@ -7,6 +7,14 @@ export type IconName =
   | "chevron"
   | "chevron-down"
   | "clock"
+  | "compare"
+  | "download"
+  | "eye"
+  | "fork"
+  | "git-merge"
+  | "issue"
+  | "people"
+  | "tag"
   | "filter"
   | "lock"
   | "monitor"
@@ -52,7 +60,54 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M12 7v5l3 2" />
     </>
   ),
+  compare: (
+    <>
+      <rect x="3" y="4" width="7" height="16" rx="2" />
+      <rect x="14" y="4" width="7" height="16" rx="2" />
+    </>
+  ),
+  download: <path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14" />,
+  eye: (
+    <>
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </>
+  ),
   filter: <path d="M4 6h16M7 12h10M10 18h4" />,
+  fork: (
+    <>
+      <circle cx="6" cy="5" r="2" />
+      <circle cx="18" cy="5" r="2" />
+      <circle cx="12" cy="19" r="2" />
+      <path d="M6 7v1a3 3 0 0 0 3 3h6a3 3 0 0 0 3-3V7M12 11v6" />
+    </>
+  ),
+  "git-merge": (
+    <>
+      <circle cx="6" cy="5" r="2" />
+      <circle cx="6" cy="19" r="2" />
+      <circle cx="18" cy="13" r="2" />
+      <path d="M6 7v10M6 7c0 4 4 6 10 6" />
+    </>
+  ),
+  issue: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="1.5" />
+    </>
+  ),
+  people: (
+    <>
+      <circle cx="9" cy="8" r="3.5" />
+      <path d="M2.5 20a6.5 6.5 0 0 1 13 0M16 4.5a3.5 3.5 0 0 1 0 7M18.5 14a6.5 6.5 0 0 1 3 6" />
+    </>
+  ),
+  tag: (
+    <>
+      <path d="M3 12V4h8l10 10-8 8L3 12Z" />
+      <circle cx="7.5" cy="8.5" r="1.5" />
+    </>
+  ),
   lock: (
     <>
       <rect x="5" y="11" width="14" height="9" rx="2" />

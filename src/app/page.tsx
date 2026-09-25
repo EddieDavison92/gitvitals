@@ -1,73 +1,60 @@
+import Link from "next/link";
 import { Icon, type IconName } from "@/components/icon";
 import { RecentRepos } from "@/components/recent-repos";
 import { RepoPicker } from "@/components/repo-picker";
-import { ThemeToggle } from "@/components/theme-toggle";
-import { TokenSettings } from "@/components/token-settings";
+import { SiteFooter, SiteHeader } from "@/components/site-header";
 
-const EXAMPLES = ["cli/cli", "astral-sh/uv", "dbt-labs/dbt-core", "wnl-icb-analytics/dbt-analytics"];
+const EXAMPLES = ["astral-sh/uv", "vercel/next.js", "dbt-labs/dbt-core", "cli/cli"];
 
 const POINTS: Array<{ icon: IconName; title: string; body: string }> = [
   {
-    icon: "branch",
-    title: "Is main broken?",
-    body: "Each workflow's latest result on the default branch, how long it's been failing and why.",
-  },
-  {
-    icon: "warning",
-    title: "Failure-first",
-    body: "Failed job, step and error annotations for recent failures, plus a drawer with every job's steps and timings.",
-  },
-  {
     icon: "pulse",
-    title: "Live while runs are active",
-    body: "Polls faster while workflows are queued or running, and backs off when nothing is happening.",
+    title: "Is it maintained?",
+    body: "A verdict from a year of commits, release cadence, merge times and CI on the default branch.",
   },
   {
-    icon: "clock",
-    title: "Trends",
-    body: "Daily success rate, median and p95 durations, queue time and runs that only passed on re-run.",
+    icon: "git-merge",
+    title: "How fast does it move?",
+    body: "Time to merge and to close issues, weekly throughput by outcome, and what's been waiting longest.",
+  },
+  {
+    icon: "people",
+    title: "Who builds it?",
+    body: "Top contributors, bus factor, and how much work comes from maintainers, outside contributors and bots.",
   },
   {
     icon: "workflow",
-    title: "Nothing to install",
-    body: "Your browser reads the GitHub API directly. No server, account or database; links are shareable.",
+    title: "Is CI green?",
+    body: "Workflow health on main, failures with their cause, durations, and live updates while runs are active.",
+  },
+  {
+    icon: "compare",
+    title: "Compare before you depend",
+    body: "Put up to four repositories side by side and see which is healthier on every measure.",
   },
   {
     icon: "lock",
-    title: "Token optional",
-    body: "60 requests an hour without one. A read-only token raises that to 5,000 and adds private repos.",
+    title: "Free and private",
+    body: "Runs in your browser against GitHub's API. No account; an optional token stays on your device.",
   },
 ];
 
 export default function Home() {
   return (
     <main className="flex min-h-screen flex-col bg-canvas text-fg">
-      <header className="border-b border-white/10 bg-chrome text-white">
-        <div className="mx-auto flex max-w-[1480px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-3">
-            <div className="grid size-9 place-items-center rounded-xl border border-white/10 bg-white/10 text-sky-300 shadow-inner">
-              <Icon name="workflow" className="size-5" />
-            </div>
-            <p className="text-sm font-semibold tracking-tight sm:text-base">Actions observability</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <ThemeToggle />
-            <TokenSettings />
-          </div>
-        </div>
-      </header>
+      <SiteHeader showPicker={false} />
 
       <section className="relative overflow-hidden border-b border-line">
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_380px_at_50%_-10%,var(--info-soft),transparent)]"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(900px_400px_at_50%_-10%,var(--info-soft),transparent)]"
         />
         <div className="relative mx-auto max-w-2xl px-5 pb-16 pt-20 sm:pt-28">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-info-fg">GitHub Actions</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight sm:text-5xl">How reliable is a repo&apos;s CI?</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-info-fg">Free · no sign-in</p>
+          <h1 className="mt-2 text-balance text-4xl font-semibold tracking-tight sm:text-5xl">Vital signs for any GitHub repo</h1>
           <p className="mt-4 text-base leading-7 text-fg-muted">
-            Success rates, failures and durations for any repository&apos;s workflows, loaded straight from
-            GitHub in your browser.
+            See whether a project is alive, how quickly it merges and ships, who maintains it and whether CI is green. Paste a
+            repository to start.
           </p>
 
           <div className="mt-8">
@@ -77,10 +64,15 @@ export default function Home() {
             <RecentRepos examples={EXAMPLES} />
           </div>
 
-          <p className="mt-6 text-xs text-fg-subtle">
-            Tip: swap <span className="font-mono text-fg-muted">github.com</span> for this site&apos;s address in any
-            repo or run URL.
-          </p>
+          <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-2 text-xs text-fg-subtle">
+            <Link href="/compare" className="flex items-center gap-1.5 font-medium text-info-fg hover:underline">
+              <Icon name="compare" className="size-3.5" />
+              Compare repositories
+            </Link>
+            <span>
+              Tip: swap <span className="font-mono text-fg-muted">github.com</span> for this site&apos;s address in any repo URL.
+            </span>
+          </div>
         </div>
       </section>
 
@@ -96,15 +88,7 @@ export default function Home() {
         ))}
       </section>
 
-      <footer className="border-t border-line py-6 text-center text-xs text-fg-subtle">
-        Not affiliated with GitHub. MIT licensed.{" "}
-        <a
-          href="https://github.com/EddieDavison92/gh-actions-observability"
-          className="font-medium text-fg-muted hover:text-fg"
-        >
-          Source on GitHub
-        </a>
-      </footer>
+      <SiteFooter />
     </main>
   );
 }

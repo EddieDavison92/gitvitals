@@ -34,7 +34,7 @@ export function RepoPicker({ variant = "hero" }: { variant?: "hero" | "compact" 
           aria-label="Switch repository"
           aria-invalid={invalid}
           spellCheck={false}
-          className={`h-8 w-56 rounded-lg border bg-white/5 px-3 text-xs text-white outline-none transition placeholder:text-slate-500 focus:w-72 focus:bg-white/10 ${
+          className={`h-8 w-56 rounded-lg border bg-white/5 px-3 text-xs text-white outline-none transition placeholder:text-slate-500 focus:w-72 focus:bg-white/10 focus-visible:outline-none ${
             invalid ? "border-rose-400/60" : "border-white/10 focus:border-sky-400/60"
           }`}
         />
@@ -61,13 +61,13 @@ export function RepoPicker({ variant = "hero" }: { variant?: "hero" | "compact" 
           aria-invalid={invalid}
           autoFocus
           spellCheck={false}
-          className="h-10 min-w-0 flex-1 bg-transparent font-mono text-sm text-fg outline-none placeholder:text-fg-subtle"
+          className="h-10 min-w-0 flex-1 bg-transparent font-mono text-sm text-fg outline-none placeholder:text-fg-subtle focus-visible:outline-none"
         />
         <button
           type="submit"
           className="h-10 shrink-0 rounded-xl bg-fg px-4 text-sm font-semibold text-surface transition hover:opacity-90"
         >
-          View runs
+          Check vitals
         </button>
       </div>
       {invalid && (

@@ -64,3 +64,31 @@ export function formatCount(value: number) {
 export function plural(count: number, noun: string, pluralNoun = `${noun}s`) {
   return `${formatCount(count)} ${count === 1 ? noun : pluralNoun}`;
 }
+
+/** Human span for longer durations: "40 minutes", "5 hours", "3 days", "6 weeks", "4 months", "2 years". */
+export function formatSpan(ms: number) {
+  const minutes = ms / 60_000;
+  const unit = (value: number, noun: string) => plural(Math.max(1, Math.round(value)), noun);
+  if (minutes < 90) return unit(minutes, "minute");
+  const hours = minutes / 60;
+  if (hours < 48) return unit(hours, "hour");
+  const days = hours / 24;
+  if (days < 14) return unit(days, "day");
+  if (days < 70) return unit(days / 7, "week");
+  if (days < 548) return unit(days / 30.44, "month");
+  return unit(days / 365.25, "year");
+}
+
+const compactFormat = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
+
+/** Compact number: 1.2K, 34K, 1.5M (en-US, so "m" can't be misread as minutes). */
+export function formatCompact(value: number) {
+  return compactFormat.format(value);
+}
+
+/** Share (0–1) as a percentage; non-zero shares that round to nothing show as "<0.1%". */
+export function formatPercent(share: number, digits = 0) {
+  const minimum = 10 ** -digits;
+  if (share > 0 && share * 100 < minimum) return `<${minimum}%`;
+  return `${(share * 100).toFixed(digits)}%`;
+}

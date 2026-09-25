@@ -5,8 +5,6 @@ import {
   createFetcher,
   failureConclusions,
   fetchFailureDetail,
-  fetchRateLimit,
-  fetchRepoMeta,
   fetchRun,
   fetchRunJobs,
   fetchRuns,
@@ -17,9 +15,10 @@ import {
 import { getFetchSince, type PeriodFilter } from "./periods";
 import { CACHE_VERSION, detailKey, mergeRuns, readCache, repoKey, writeCache, type RepoCache } from "./run-cache";
 import { isActiveRun, isFailedRun, isLiveRun } from "./run-status";
+import { currentRateLimit, setRateLimit } from "./rate-limit";
 import { useToken } from "./token-store";
 import { useHydrated } from "./use-hydrated";
-import type { ActionsRun, FailureDetail, RateLimit, RunJobs } from "./types";
+import type { ActionsRun, FailureDetail, RunJobs } from "./types";
 
 /**
  * Request budgets. Anonymous visitors get 60 requests/hour per IP, so they load
@@ -50,7 +49,6 @@ const BUDGET = {
 
 /** Overlap when refreshing so runs created during the last fetch aren't missed. */
 const REFRESH_OVERLAP_MS = 10 * 60_000;
-const META_MAX_AGE_MS = 24 * 60 * 60_000;
 const DETAIL_CONCURRENCY = 4;
 /** The run drawer shows annotations for up to this many failed jobs. */
 const DRAWER_ANNOTATED_JOBS = 5;
@@ -75,32 +73,6 @@ export function toLoadError(error: unknown): LoadError {
   return { kind: "other", message: error instanceof Error ? error.message : "Request failed" };
 }
 
-// Rate limits apply per IP or token, not per repo, so they live in one shared store.
-let rateLimit: RateLimit | null = null;
-const rateLimitListeners = new Set<() => void>();
-
-function setRateLimit(next: RateLimit) {
-  rateLimit = next;
-  rateLimitListeners.forEach((listener) => listener());
-}
-
-/** Current rate limit; refreshed from the free /rate_limit endpoint when the token changes. */
-export function useRateLimit() {
-  const token = useToken();
-  const hydrated = useHydrated();
-  useEffect(() => {
-    if (hydrated) fetchRateLimit(token).then((next) => next && setRateLimit(next));
-  }, [hydrated, token]);
-  return useSyncExternalStore(
-    (listener) => {
-      rateLimitListeners.add(listener);
-      return () => rateLimitListeners.delete(listener);
-    },
-    () => rateLimit,
-    () => null,
-  );
-}
-
 type StoreState = {
   cache: RepoCache | null;
   loading: boolean;
@@ -116,8 +88,6 @@ function emptyCache(): RepoCache {
     coveredSince: null,
     truncated: false,
     pageCap: 0,
-    meta: null,
-    metaFetchedAt: 0,
   };
 }
 
@@ -156,7 +126,7 @@ class RepoStore {
 
   private set(patch: Partial<StoreState>, persist = false) {
     this.state = { ...this.state, ...patch };
-    if (persist && this.state.cache) writeCache(this.key, `${this.owner}/${this.repo}`, this.state.cache);
+    if (persist && this.state.cache) writeCache(this.key, this.state.cache);
     this.listeners.forEach((listener) => listener());
   }
 
@@ -184,19 +154,6 @@ class RepoStore {
       this.set({ ...patch, loading: false, error: null }, true);
     } catch (error) {
       this.set({ loading: false, error: toLoadError(error) });
-    }
-  }
-
-  /** Repo metadata, refetched daily; failures keep whatever was cached. */
-  private async metaFor(get: Fetcher) {
-    const cache = this.state.cache;
-    if (cache?.meta && Date.now() - cache.metaFetchedAt < META_MAX_AGE_MS) {
-      return { meta: cache.meta, metaFetchedAt: cache.metaFetchedAt };
-    }
-    try {
-      return { meta: await fetchRepoMeta(get, this.owner, this.repo), metaFetchedAt: Date.now() };
-    } catch {
-      return { meta: cache?.meta ?? null, metaFetchedAt: cache?.metaFetchedAt ?? 0 };
     }
   }
 
@@ -241,7 +198,7 @@ class RepoStore {
     const cache = this.state.cache;
     const live =
       cache?.runs.some((run) => isLiveRun(run, cache.fetchedAt)) &&
-      (token !== null || (rateLimit?.remaining ?? budget.liveReserve + 1) > budget.liveReserve);
+      (token !== null || (currentRateLimit()?.remaining ?? budget.liveReserve + 1) > budget.liveReserve);
     const interval = live ? budget.liveRefreshMs : budget.refreshMs;
     const age = Date.now() - (cache?.fetchedAt ?? 0);
     return Math.max(1_000, interval - age);
@@ -250,7 +207,6 @@ class RepoStore {
   private fullFetch(since: string | null, token: string | null) {
     const { maxPages } = budgetFor(token);
     return this.run(token, async (get) => {
-      const metaPromise = this.metaFor(get);
       // Show each batch as it lands; busy repos take a few seconds to page through.
       const showPartial = (runsSoFar: ActionsRun[]) => {
         const current = this.state.cache ?? emptyCache();
@@ -266,12 +222,10 @@ class RepoStore {
         });
       };
       const result = await fetchRuns(get, this.owner, this.repo, since, maxPages, showPartial);
-      const meta = await metaPromise;
       const previous = this.state.cache ?? emptyCache();
       return {
         cache: {
           ...previous,
-          ...meta,
           runs: mergeRuns(previous.runs, result.runs),
           fetchedAt: Date.now(),
           coveredSince: result.truncated ? (result.runs.at(-1)?.createdAt ?? since) : since,
@@ -301,17 +255,13 @@ class RepoStore {
     await this.run(
       token,
       async (get) => {
-        const [result, meta] = await Promise.all([
-          fetchRuns(get, this.owner, this.repo, since, refreshPages),
-          this.metaFor(get),
-        ]);
+        const result = await fetchRuns(get, this.owner, this.repo, since, refreshPages);
         // More new runs than one refresh can page through leaves a hole in coverage.
         gap = result.truncated;
         const latest = this.state.cache ?? cache;
         return {
           cache: {
             ...latest,
-            ...meta,
             runs: mergeRuns(latest.runs, result.runs),
             fetchedAt: Date.now(),
             coveredSince: gap ? (result.runs.at(-1)?.createdAt ?? since) : latest.coveredSince,
@@ -370,7 +320,8 @@ class RepoStore {
     const get = createFetcher(token, setRateLimit);
     const worker = async () => {
       for (let run = pending.shift(); run; run = pending.shift()) {
-        if (this.isRateLimited() || (rateLimit && rateLimit.remaining <= detailReserve)) return;
+        const limit = currentRateLimit();
+        if (this.isRateLimited() || (limit && limit.remaining <= detailReserve)) return;
         const key = detailKey(run);
         this.detailsInFlight.add(key);
         try {
@@ -461,7 +412,6 @@ export function useRepoRuns(owner: string, repo: string, period: PeriodFilter) {
 
   return {
     runs,
-    meta: cache?.meta ?? null,
     fetchedAt: cache?.fetchedAt || null,
     truncated: cache?.truncated ?? false,
     coveredSince: cache?.coveredSince ?? null,

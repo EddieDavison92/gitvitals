@@ -4,41 +4,43 @@ Architecture notes for humans and coding agents working in this repository.
 
 ## System overview
 
-Client-side GitHub Actions dashboard for any repository. Next.js serves the shell; all data comes from the GitHub REST API, called from the browser. No backend, database or server-side GitHub calls.
+gitvitals shows the health of any GitHub repository. Next.js serves the pages; every GitHub request is made from the browser. There is no backend, database or server-side GitHub call (social cards render text only).
 
-- `src/app/page.tsx`: landing page (repo picker, recent repos)
-- `src/app/[owner]/[repo]/[[...rest]]/page.tsx`: dashboard route; extra path segments redirect to `/owner/repo`
-- `src/components/actions-dashboard.tsx`: dashboard UI
-- `src/lib/github.ts`: API client, run mapping, failure summaries
-- `src/lib/repo-store.ts`: per-repo store (loading, incremental refresh, failure enrichment) and `useRepoRuns` hook
-- `src/lib/run-cache.ts`: `localStorage` cache and recent-repo index
-- `src/lib/token-store.ts`: optional user token in `localStorage`
+- `src/app/page.tsx`: landing page
+- `src/app/[owner]/[repo]/[[...rest]]/page.tsx`: repo pages; `resolveRepoPath` (`src/lib/routes.ts`) maps the path to a tab and redirects GitHub-style paths
+- `src/app/compare/page.tsx`: side-by-side comparison
+- `src/components/repo/`: shell (identity, tab nav) and one component per tab
+- `src/components/actions/`: the Actions tab (CI dashboard, run drawer)
+- `src/components/compare/`: comparison table
+- `src/components/ui/`: shared primitives, chart helpers and tone classes
 
-## Data flow
+## Data layer
 
-1. `useRepoRuns(owner, repo, period)` reads the cached runs, then calls `store.load(period, token)`.
-2. `load` fetches runs created since twice the period ago, unless the cache already covers it. Page 1 gives `total_count`; later pages load in parallel batches.
-3. Refresh fetches runs created since the newest cached run (minus a 10-minute overlap), stretched back to cover still-active runs from the last 24 hours.
-4. The dashboard passes on-screen failed runs to `enrich`, which loads the failed job, step and annotations (2 requests per run) and caches them by `runId:attempt`.
+- `src/lib/github.ts`: fetcher (rate-limit reporting, 202 handling, conditional requests), repo metadata, workflow runs, jobs and failure summaries
+- `src/lib/github-insights.ts`: commit statistics, contributors, community profile, releases, pull requests, issues, search-based flow counts, traffic. Loaders map raw payloads to small shapes before caching.
+- `src/lib/resource-store.ts`: keyed cache for everything except runs. Persists to `localStorage` (`gv:r:<owner/repo>:<name>`), respects a TTL, de-duplicates in-flight loads, retries while stats are computing (202) and once the search limit resets.
+- `src/lib/repo-data.ts`: one hook per dataset with its loader and TTL. Names must encode parameters (e.g. `pulls-3`).
+- `src/lib/repo-store.ts`: workflow runs (paged loads, incremental refresh, live polling, failure enrichment, run jobs)
+- `src/lib/insights.ts` and `src/lib/stats.ts`: pure analytics (activity level, bus factor, cadence, cohorts, durations, branch health). Keep these pure and tested.
+- `src/lib/storage.ts`: `localStorage` helpers and the recent-repo list; evicting a repo clears all its keys
+- `src/lib/rate-limit.ts`: shared core and search rate limits
 
-Store operations are serialised through a promise queue. Loads wait for hydration so the token is read before the first request.
+## Request budgets
 
-## Budgets
+Anonymous users get 60 core requests an hour and 10 searches a minute.
 
-Defined in `BUDGET` in `src/lib/repo-store.ts`:
-
-- Anonymous (60 requests/hour per IP): 3 pages, 1-page refresh every 5 minutes, enrichment stops at 12 remaining requests.
-- Token (5,000/hour): 10 pages (GitHub returns at most 1,000 results for `created`-filtered queries), 5-page refresh every minute, enrichment stops at 100 remaining.
-
-`/rate_limit` is free and is used to show the current limit.
+- Overview: ~7 core requests plus 5 searches (the `flow-30d` bundle). Other tabs add 1–4 each; most datasets are shared between tabs.
+- Actions: see `BUDGET` in `src/lib/repo-store.ts` (3 pages anonymously, 10 with a token; faster polling while runs are live).
+- Prefer search counts over list pagination for totals, and cached, shared resources over new requests.
 
 ## Guardrails
 
 - Keep every GitHub call client-side. Don't add a server token or proxy.
-- Re-check request budgets when adding API calls; anonymous users have 60 an hour.
-- Job logs need auth even for public repos; failure summaries use steps and annotations instead.
-- Preserve the filter and failure-first UX in dashboard edits.
-- Only `failure`, `timed_out` and `startup_failure` count as failed.
+- Don't import non-component values from `"use client"` modules into server components; they become client references. Put shared constants in plain modules (see `theme-script.ts`, `compare.ts`).
+- Map API payloads to minimal shapes before caching; raw PR and release lists are megabytes.
+- Label samples honestly (e.g. "100 most recent") and prefer larger samples when two are available.
+- Job logs need auth even for public repos; failure summaries use steps and annotations.
+- Only `failure`, `timed_out` and `startup_failure` count as failed runs.
 
 ## Validation checklist
 
@@ -48,4 +50,3 @@ CI (`.github/workflows/ci.yml`) runs these on every PR; `main` requires it to pa
 - `npm run typecheck`
 - `npm test` (Vitest; tests sit next to the code as `*.test.ts`)
 - `npm run build`
-- Load a busy public repo (e.g. `cli/cli`) anonymously and confirm the request count stays near 10.

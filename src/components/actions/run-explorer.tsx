@@ -6,7 +6,8 @@ import type { RunView } from "@/lib/dashboard-state";
 import { formatCount } from "@/lib/format";
 import { failureHeadline, isActiveRun, isFailedRun, isPassedRun } from "@/lib/run-status";
 import type { ActionsRun } from "@/lib/types";
-import { AttemptBadge, Card, EmptyState, Eyebrow, Kbd, LiveDuration, RelativeTime, StatusBadge, StatusDot } from "./ui";
+import { Card, EmptyState, Eyebrow, Kbd, RelativeTime } from "@/components/ui/primitives";
+import { AttemptBadge, LiveDuration, StatusBadge, StatusDot } from "./run-ui";
 
 const VIEWS: Array<{ value: RunView; label: string }> = [
   { value: "all", label: "All runs" },

@@ -1,4 +1,4 @@
-import { isActiveRun, isFailedRun, isPassedRun, queueMs } from "./run-status";
+import { isActiveRun, isFailedRun, isPassedRun } from "./run-status";
 import type { ActionsRun } from "./types";
 
 export function median(values: number[]) {
@@ -33,7 +33,6 @@ export function summarizeRuns(runs: ActionsRun[]) {
   const successful = runs.filter(isPassedRun).length;
   const failed = runs.filter(isFailedRun).length;
   const durations = decidedDurations(runs);
-  const queues = runs.map(queueMs).filter((wait): wait is number => wait !== null);
 
   return {
     total: runs.length,
@@ -47,7 +46,6 @@ export function summarizeRuns(runs: ActionsRun[]) {
     successRate: successRateOf(successful, failed),
     medianDurationMs: median(durations),
     p95DurationMs: percentile(durations, 95),
-    medianQueueMs: median(queues),
   };
 }
 
@@ -130,8 +128,9 @@ export function dailyTrend(runs: ActionsRun[]): DayStat[] {
   }).sort((a, b) => a.day.localeCompare(b.day));
 }
 
-// PR runs report the PR's head branch, which can be a fork's "main".
-const PR_EVENTS = new Set(["pull_request", "pull_request_target"]);
+// PR runs report the PR's head branch, which can be a fork's "main". Dynamic runs
+// (Dependabot, CodeQL default setup, Copilot) are GitHub-managed, not the repo's CI.
+const EXCLUDED_EVENTS = new Set(["pull_request", "pull_request_target", "dynamic"]);
 
 /** Most common branch among push runs; used when repo metadata isn't loaded. */
 export function inferDefaultBranch(runs: ActionsRun[]) {
@@ -167,7 +166,7 @@ export type WorkflowHealth = {
 export function branchHealth(runs: ActionsRun[], branch: string): WorkflowHealth[] {
   const grouped = new Map<string, ActionsRun[]>();
   for (const run of runs) {
-    if (run.branch !== branch || PR_EVENTS.has(run.event)) continue;
+    if (run.branch !== branch || EXCLUDED_EVENTS.has(run.event)) continue;
     if (!isPassedRun(run) && !isFailedRun(run)) continue;
     const group = grouped.get(run.workflowName) ?? [];
     group.push(run);

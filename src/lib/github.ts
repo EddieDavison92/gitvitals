@@ -78,7 +78,20 @@ type RawRepo = {
   default_branch: string;
   private: boolean;
   archived: boolean;
+  fork: boolean;
+  parent?: { full_name: string };
   stargazers_count: number;
+  forks_count: number;
+  subscribers_count?: number;
+  open_issues_count: number;
+  language: string | null;
+  license: { spdx_id: string | null; name: string } | null;
+  topics?: string[];
+  homepage: string | null;
+  created_at: string;
+  pushed_at: string;
+  has_issues: boolean;
+  permissions?: { push?: boolean };
   html_url: string;
   owner: { avatar_url: string };
 };
@@ -107,7 +120,14 @@ function readRateLimit(headers: Headers): RateLimit | null {
   return { limit, remaining, resetAt: reset * 1000 };
 }
 
-export type Fetcher = <T>(path: string) => Promise<T>;
+/** "core" for most endpoints; search has its own, smaller per-minute limit. */
+export type RateLimitResource = "core" | "search";
+export type RateLimitListener = (rateLimit: RateLimit, resource: RateLimitResource) => void;
+
+export type Fetcher = (<T>(path: string) => Promise<T>) & {
+  /** Like the fetcher, but resolves null for 202 (stats still being computed) and 204. */
+  maybe: <T>(path: string) => Promise<T | null>;
+};
 
 /**
  * Creates a GitHub API fetcher that reports rate-limit headers after every response.
@@ -116,10 +136,10 @@ export type Fetcher = <T>(path: string) => Promise<T>;
  */
 export function createFetcher(
   token: string | null,
-  onRateLimit: (rateLimit: RateLimit) => void,
+  onRateLimit: RateLimitListener,
   { revalidate = false }: { revalidate?: boolean } = {},
 ): Fetcher {
-  return async <T>(path: string) => {
+  const request = async <T>(path: string): Promise<T | null> => {
     const res = await fetch(`${API}${path}`, {
       cache: revalidate ? "no-cache" : "default",
       headers: {
@@ -129,26 +149,32 @@ export function createFetcher(
       },
     });
     const rateLimit = readRateLimit(res.headers);
-    if (rateLimit) onRateLimit(rateLimit);
+    if (rateLimit) onRateLimit(rateLimit, res.headers.get("x-ratelimit-resource") === "search" ? "search" : "core");
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { message?: string } | null;
       throw new GitHubError(body?.message ?? `GitHub API ${res.status}`, res.status, rateLimit);
     }
+    if (res.status === 202 || res.status === 204) return null;
     return (await res.json()) as T;
   };
+  const get = async <T>(path: string) => (await request<T>(path)) as T;
+  return Object.assign(get, { maybe: request });
 }
 
-/** Reads the current limit without spending a request (/rate_limit is free). */
-export async function fetchRateLimit(token: string | null): Promise<RateLimit | null> {
+export type RateLimits = { core: RateLimit | null; search: RateLimit | null };
+
+/** Reads the current limits without spending a request (/rate_limit is free). */
+export async function fetchRateLimits(token: string | null): Promise<RateLimits | null> {
   try {
     const res = await fetch(`${API}/rate_limit`, {
       cache: "no-store",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) return null;
-    const body = (await res.json()) as { resources: { core: { limit: number; remaining: number; reset: number } } };
-    const core = body.resources.core;
-    return { limit: core.limit, remaining: core.remaining, resetAt: core.reset * 1000 };
+    type Raw = { limit: number; remaining: number; reset: number };
+    const { resources } = (await res.json()) as { resources: { core: Raw; search: Raw } };
+    const map = (raw: Raw) => ({ limit: raw.limit, remaining: raw.remaining, resetAt: raw.reset * 1000 });
+    return { core: map(resources.core), search: map(resources.search) };
   } catch {
     return null;
   }
@@ -156,13 +182,27 @@ export async function fetchRateLimit(token: string | null): Promise<RateLimit | 
 
 export async function fetchRepoMeta(get: Fetcher, owner: string, repo: string): Promise<RepoMeta> {
   const raw = await get<RawRepo>(`/repos/${owner}/${repo}`);
+  const spdx = raw.license?.spdx_id;
   return {
     fullName: raw.full_name,
     description: raw.description,
     defaultBranch: raw.default_branch,
     isPrivate: raw.private,
     isArchived: raw.archived,
+    isFork: raw.fork,
+    parent: raw.parent?.full_name ?? null,
     stars: raw.stargazers_count,
+    forks: raw.forks_count,
+    watchers: raw.subscribers_count ?? 0,
+    openIssuesAndPulls: raw.open_issues_count,
+    language: raw.language,
+    license: raw.license ? (spdx && spdx !== "NOASSERTION" ? spdx : raw.license.name) : null,
+    topics: raw.topics ?? [],
+    homepage: raw.homepage || null,
+    createdAt: raw.created_at,
+    pushedAt: raw.pushed_at,
+    hasIssues: raw.has_issues,
+    canPush: raw.permissions?.push ?? false,
     avatarUrl: raw.owner.avatar_url,
     htmlUrl: raw.html_url,
   };
@@ -183,13 +223,16 @@ function workflowNameFromPath(path?: string) {
 
 function toActionsRun(run: RawRun): ActionsRun {
   const startedAt = run.run_started_at ?? run.created_at;
+  const name = run.name || workflowNameFromPath(run.path);
+  // GitHub-managed "dynamic" runs (Dependabot, CodeQL default setup) append a job id; drop it so they group.
+  const workflowName = run.event === "dynamic" ? name.replace(/ #\d+$/, "") : name;
   const start = new Date(startedAt).getTime();
   const end = new Date(run.updated_at).getTime();
   return {
     id: run.id,
     attempt: run.run_attempt ?? 1,
     name: resolveRunTitle(run),
-    workflowName: run.name || workflowNameFromPath(run.path),
+    workflowName,
     branch: run.head_branch ?? "(detached)",
     event: run.event,
     status: run.status,
@@ -211,6 +254,13 @@ function toActionsRun(run: RawRun): ActionsRun {
 
 export async function fetchRun(get: Fetcher, owner: string, repo: string, runId: number) {
   return toActionsRun(await get<RawRun>(`/repos/${owner}/${repo}/actions/runs/${runId}`));
+}
+
+/** Latest runs on one branch (one request); enough to judge its current health. */
+export async function fetchBranchRuns(get: Fetcher, owner: string, repo: string, branch: string) {
+  const params = new URLSearchParams({ branch, per_page: "100", exclude_pull_requests: "true" });
+  const payload = await get<{ workflow_runs: RawRun[] }>(`/repos/${owner}/${repo}/actions/runs?${params}`);
+  return payload.workflow_runs.map(toActionsRun);
 }
 
 /** GitHub's `created` filter rejects fractional seconds. */

@@ -5,8 +5,9 @@ import { formatRate } from "@/lib/format";
 import { failureHeadline } from "@/lib/run-status";
 import type { WorkflowStat } from "@/lib/stats";
 import type { ActionsRun } from "@/lib/types";
-import { DOT, rateTone, TEXT } from "./tones";
-import { AttemptBadge, Card, EmptyState, RelativeTime, SectionHeader } from "./ui";
+import { DOT, rateTone, TEXT } from "@/components/ui/tones";
+import { Card, EmptyState, RelativeTime, SectionHeader } from "@/components/ui/primitives";
+import { AttemptBadge } from "./run-ui";
 
 const PREVIEW_COUNT = 5;
 

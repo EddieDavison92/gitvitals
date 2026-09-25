@@ -14,9 +14,10 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://gh-actions-observability.vercel.app"),
-  title: "Actions observability",
-  description: "GitHub Actions success rates, failures and durations for any public repository.",
+  metadataBase: new URL("https://gitvitals-app.vercel.app"),
+  title: "gitvitals · vital signs for any GitHub repo",
+  description:
+    "Is a GitHub project maintained? Activity, pull request and issue flow, releases, contributors and CI health for any repository, free in your browser.",
 };
 
 export const viewport: Viewport = {

@@ -5,12 +5,13 @@ import { Icon } from "@/components/icon";
 import { failureMessages } from "@/lib/github";
 import { formatDuration, formatTime, plural } from "@/lib/format";
 import { useRunJobs, type LoadError } from "@/lib/repo-store";
-import { failureHeadline, isActiveRun, isFailedRun, queueMs, spanMs, statusLabel, toneOf } from "@/lib/run-status";
+import { failureHeadline, isActiveRun, isFailedRun, spanMs, statusLabel, toneOf } from "@/lib/run-status";
 import type { ActionsRun, RunJob, RunJobs } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
 import { describeError } from "./states";
-import { BADGE, DOT, TEXT } from "./tones";
-import { AttemptBadge, LiveDuration, RelativeTime, StatusBadge } from "./ui";
+import { BADGE, DOT, TEXT } from "@/components/ui/tones";
+import { RelativeTime } from "@/components/ui/primitives";
+import { AttemptBadge, LiveDuration, StatusBadge } from "./run-ui";
 
 /** Side panel with a run's details, jobs, steps and failure annotations. */
 export function RunDrawer({
@@ -101,7 +102,7 @@ export function RunDrawer({
             <DrawerSkeleton />
           ) : (
             <>
-              <RunFacts run={run} onSelectBranch={onSelectBranch} />
+              <RunFacts run={run} jobs={jobs} onSelectBranch={onSelectBranch} />
               {isFailedRun(run) && failureHeadline(run) && (
                 <div className={`rounded-xl border px-4 py-3 ${BADGE.bad}`}>
                   <p className="text-[10px] font-semibold uppercase tracking-[0.14em] opacity-80">Why it failed</p>
@@ -117,8 +118,23 @@ export function RunDrawer({
   );
 }
 
-function RunFacts({ run, onSelectBranch }: { run: ActionsRun; onSelectBranch: (branch: string) => void }) {
-  const queue = queueMs(run);
+/** Wait between the attempt starting and its first job getting a runner. */
+function runnerWait(run: ActionsRun, jobs: RunJobs | null) {
+  const starts = (jobs?.jobs ?? []).map((job) => (job.startedAt ? Date.parse(job.startedAt) : NaN)).filter(Number.isFinite);
+  if (starts.length === 0) return null;
+  return Math.max(0, Math.min(...starts) - Date.parse(run.startedAt));
+}
+
+function RunFacts({
+  run,
+  jobs,
+  onSelectBranch,
+}: {
+  run: ActionsRun;
+  jobs: RunJobs | null;
+  onSelectBranch: (branch: string) => void;
+}) {
+  const wait = runnerWait(run, jobs);
   const facts: Array<[string, React.ReactNode]> = [
     [
       "Branch",
@@ -140,7 +156,7 @@ function RunFacts({ run, onSelectBranch }: { run: ActionsRun; onSelectBranch: (b
     ],
     ["Started", <RelativeTime key="started" value={run.startedAt} />],
     ["Duration", <LiveDuration key="duration" run={run} />],
-    ["Queued for", queue === null ? "–" : formatDuration(queue)],
+    ["Waited for runner", wait === null ? "–" : formatDuration(wait)],
     ["Attempt", run.attempt > 1 ? `${run.attempt} (re-run)` : "1"],
   ];
 

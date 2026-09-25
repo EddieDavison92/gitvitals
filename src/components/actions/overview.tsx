@@ -5,8 +5,8 @@ import { formatDuration, formatRate, plural } from "@/lib/format";
 import { failureHeadline } from "@/lib/run-status";
 import type { RunSummary, WorkflowHealth } from "@/lib/stats";
 import type { ActionsRun } from "@/lib/types";
-import { BADGE, DOT, rateTone, TEXT, type Tone } from "./tones";
-import { CARD, Eyebrow, RelativeTime } from "./ui";
+import { BADGE, DOT, rateTone, TEXT, type Tone } from "@/components/ui/tones";
+import { CARD, Eyebrow, RelativeTime } from "@/components/ui/primitives";
 
 function headline(summary: RunSummary, failing: WorkflowHealth[], branch: string | null, liveCount: number, hasBranchRuns: boolean) {
   if (failing.length > 0) {
@@ -51,10 +51,10 @@ export function Overview({
       <div className="flex items-end justify-between gap-3">
         <div>
           <Eyebrow tone="info">Current health</Eyebrow>
-          <h1 id="overview-heading" className="mt-1 flex items-center gap-2.5 text-2xl font-semibold tracking-tight sm:text-3xl">
+          <h2 id="overview-heading" className="mt-1 flex items-center gap-2.5 text-2xl font-semibold tracking-tight sm:text-3xl">
             <span className={`size-2.5 shrink-0 rounded-full ${DOT[title.tone]}`} />
             {title.text}
-          </h1>
+          </h2>
         </div>
         <p className="hidden text-xs text-fg-muted sm:block">
           {periodLabel}
@@ -101,7 +101,7 @@ export function Overview({
           icon="clock"
           label="Median duration"
           value={formatDuration(summary.medianDurationMs)}
-          detail={`p95 ${formatDuration(summary.p95DurationMs)} · queue ${formatDuration(summary.medianQueueMs)}`}
+          detail={`95% finish within ${formatDuration(summary.p95DurationMs)}`}
           tone="idle"
         />
       </div>

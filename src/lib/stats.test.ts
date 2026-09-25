@@ -49,13 +49,6 @@ describe("summarizeRuns", () => {
     expect(summary).toMatchObject({ reruns: 2, passedOnRerun: 1 });
   });
 
-  it("ignores re-run attempts for queue time", () => {
-    const summary = summarizeRuns([
-      makeRun({ id: 1, createdAt: at(1, 10), startedAt: new Date(Date.UTC(2026, 8, 1, 10, 0, 30)).toISOString() }),
-      makeRun({ id: 2, attempt: 2, createdAt: at(1, 10), startedAt: at(1, 12) }),
-    ]);
-    expect(summary.medianQueueMs).toBe(30_000);
-  });
 });
 
 describe("workflowStats", () => {
@@ -104,6 +97,11 @@ describe("branchHealth", () => {
     expect(health[0]).toMatchObject({ failingSince: at(2), streakComplete: true, latest: { id: 4 } });
   });
 
+  it("ignores GitHub-managed dynamic runs", () => {
+    const health = branchHealth([makeRun({ event: "dynamic", conclusion: "failure" })], "main");
+    expect(health).toHaveLength(0);
+  });
+
   it("ignores pull request runs from a fork's main branch", () => {
     const health = branchHealth(
       [makeRun({ id: 1, event: "pull_request", conclusion: "failure" }), makeRun({ id: 2, event: "push" })],
@@ -147,5 +145,6 @@ describe("run status", () => {
     const run = makeRun({ status: "in_progress", conclusion: null, startedAt: at(1, 10) });
     expect(elapsedMs(run, Date.parse(at(1, 11)))).toBe(3_600_000);
     expect(queueMs(makeRun({ attempt: 2 }))).toBeNull();
+    expect(queueMs(makeRun({ createdAt: at(1, 10), startedAt: at(1, 11) }))).toBe(3_600_000);
   });
 });

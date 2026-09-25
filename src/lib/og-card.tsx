@@ -22,11 +22,7 @@ export function ogCard({ eyebrow, title, muted, subtitle }: { eyebrow: string; t
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
           <svg width="64" height="64" viewBox="0 0 32 32">
             <rect width="32" height="32" rx="8" fill="#1b2432" />
-            <g fill="none" stroke="#7dd3fc" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" transform="translate(4 4)">
-              <rect x="3" y="4" width="6" height="6" rx="2" />
-              <rect x="15" y="14" width="6" height="6" rx="2" />
-              <path d="M9 7h3a4 4 0 0 1 4 4v3M6 10v4a3 3 0 0 0 3 3h6" />
-            </g>
+            <path d="M5 16h5l3-8 6 16 3-8h5" fill="none" stroke="#7dd3fc" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
           <div style={{ fontSize: 30, color: "#8c99ac", letterSpacing: 4, textTransform: "uppercase" }}>{eyebrow}</div>
         </div>
