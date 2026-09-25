@@ -1,4 +1,5 @@
-export type RunStatus = "queued" | "in_progress" | "completed";
+/** GitHub run and job statuses; "waiting" means held for an environment approval. */
+export type RunStatus = "requested" | "pending" | "waiting" | "queued" | "in_progress" | "completed";
 
 export type RunConclusion =
   | "success"
@@ -38,11 +39,66 @@ export type FailureDetail = {
   points: string[];
 };
 
-export type ActionsHistoryResponse = {
-  owner: string;
-  repo: string;
-  generatedAt: string | null;
-  runs: ActionsRun[];
+export type RepoMeta = {
+  fullName: string;
+  description: string | null;
+  defaultBranch: string;
+  isPrivate: boolean;
+  isArchived: boolean;
+  isFork: boolean;
+  parent: string | null;
+  stars: number;
+  forks: number;
+  watchers: number;
+  /** Open issues plus open pull requests, as GitHub counts them. */
+  openIssuesAndPulls: number;
+  language: string | null;
+  license: string | null;
+  topics: string[];
+  homepage: string | null;
+  createdAt: string;
+  pushedAt: string;
+  hasIssues: boolean;
+  /** True when the current token can push; unlocks traffic stats. */
+  canPush: boolean;
+  avatarUrl: string;
+  htmlUrl: string;
+};
+
+export type JobStep = {
+  name: string;
+  number: number;
+  status: RunStatus;
+  conclusion: RunConclusion;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
+export type RunJob = {
+  id: number;
+  name: string;
+  status: RunStatus;
+  conclusion: RunConclusion;
+  url: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  runnerName: string | null;
+  labels: string[];
+  steps: JobStep[];
+};
+
+export type Annotation = {
+  level: "notice" | "warning" | "failure";
+  message: string;
+  title: string | null;
+  /** `path:line`, or null for annotations not tied to a file. */
+  location: string | null;
+};
+
+export type RunJobs = {
+  jobs: RunJob[];
+  /** Keyed by job id; only fetched for failed jobs. */
+  annotations: Record<number, Annotation[]>;
 };
 
 export type RateLimit = {

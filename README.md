@@ -1,62 +1,66 @@
-# GitHub Actions Observability
+# gitvitals
 
-[![CI](https://github.com/EddieDavison92/gh-actions-observability/actions/workflows/ci.yml/badge.svg)](https://github.com/EddieDavison92/gh-actions-observability/actions/workflows/ci.yml)
+[![CI](https://github.com/EddieDavison92/gitvitals/actions/workflows/ci.yml/badge.svg)](https://github.com/EddieDavison92/gitvitals/actions/workflows/ci.yml)
 [![MIT licence](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
 
-Success rates, recent failures and run durations for any GitHub repository's Actions workflows. It runs in your browser with no backend, account or install.
+Vital signs for any GitHub repository: whether it's maintained, how quickly it merges and ships, who builds it and whether CI is green. It runs in your browser against the GitHub API, with no backend, account or install.
 
-**[gh-actions-observability.vercel.app](https://gh-actions-observability.vercel.app)**
+**[gitvitals-app.vercel.app](https://gitvitals-app.vercel.app)**
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/overview-dark.png">
+  <img alt="gitvitals overview for astral-sh/uv" src="docs/overview-light.png">
+</picture>
 
 ## Usage
 
 - Enter `owner/repo` or paste any GitHub URL on the home page.
-- Or go straight to `/owner/repo`. Replacing `github.com` with the app's address in a repo URL works, including deeper links such as `/owner/repo/actions/runs/123`.
-- Pick a period (24 hours to 90 days) and filter by workflow, branch, actor or pull request.
-
-Private repos need a token (see [Rate limits and tokens](#rate-limits-and-tokens)).
+- Or swap `github.com` for the app's address in a repo URL. GitHub paths map to the matching tab: `/pulls`, `/issues`, `/releases`, `/actions` (including `/actions/runs/<id>`, which opens that run) and `/graphs/…` or `/pulse` for activity.
+- Compare repositories at `/compare?repos=owner/a,owner/b` (up to four).
 
 ## What it shows
 
-- **Current health**: success rate against the previous period, failed and active runs, median duration.
-- **Recent failures**: failed runs from the last 48 hours with the failed job, step and error annotations.
-- **Reliability watch**: workflows ranked by failures and success rate. Click one to filter to it.
-- **Trends**: daily success rate with failure volume, and median duration for the busiest workflows.
-- **Run explorer**: searchable run history filtered by status.
+| Tab | Contents |
+|---|---|
+| **Overview** | Activity verdict (very active to dormant) with its reasons; cards for commits, latest release and cadence, time to merge, open PRs, time to close issues, open issues, CI on the default branch and bus factor; top contributors, languages, community checklist, recent releases. |
+| **Activity** | Commit calendar, commits per week, when people commit (weekday × hour), code churn, full contributor list. |
+| **Pull requests** | Open and merged counts, time to merge, merge rate, share from outside contributors and bots, PRs opened per day or week by outcome, who opens them, oldest open, recently merged. |
+| **Issues** | Open, opened and completed counts, time to close, not-planned share, issues opened by outcome, open issue labels and ages, who opens them, oldest open, most discussed. |
+| **Releases** | Latest and latest stable, typical gap, downloads, a timeline coloured by semver bump, gaps and downloads per release, release table. |
+| **Actions** | CI health on the default branch, recent failures with the failed step and error annotations, reliability by workflow, trends, run explorer, and a run drawer with jobs, steps and timings. Polls faster while runs are active. |
+| **Traffic** | Views, clones, referrers and popular pages. Shown only when your token can push to the repo. |
+
+Light and dark themes follow your system, or can be set with the header toggle.
 
 ## How it works
 
-The browser calls the [GitHub REST API](https://docs.github.com/en/rest/actions/workflow-runs) directly. Next.js only serves the page.
+The browser calls the [GitHub REST API](https://docs.github.com/en/rest) directly; Next.js only serves the pages.
 
-| Step | Endpoint |
-|---|---|
-| Runs for the period (twice its length, for the comparison) | `GET /repos/{owner}/{repo}/actions/runs?created=>=…` |
-| Failed job and step, for failures on screen | `GET …/actions/runs/{id}/attempts/{n}/jobs` |
-| Error messages for that job | `GET …/check-runs/{job_id}/annotations` |
-
-- Page 1 returns the total; the remaining pages load in parallel and the dashboard updates as each batch lands.
-- Runs and failure summaries are cached in `localStorage` per repo (the last 8 repos, up to 1,000 runs each). Revisits only fetch runs created since the last load.
-- The dashboard refreshes while the tab is visible: every 5 minutes without a token, every minute with one.
-- Job logs aren't used because GitHub requires authentication to download them, even for public repos.
+- Each dataset (repo metadata, commit stats, contributors, releases, pull requests, issues, search counts, workflow runs) is fetched on demand by the tab that needs it, mapped to a small shape and cached in `localStorage` with a time-to-live. Data for the eight most recently viewed repos is kept.
+- **Search counts** (open issues, PRs merged in 30 days and so on) use GitHub's search API, which has its own limit (10 a minute anonymously, 30 with a token). Merge and close times come from the same searches, so they cover the last 30 days.
+- **Statistics endpoints** (commit activity, punch card, participation) answer 202 while GitHub computes them; the app retries automatically. GitHub doesn't compute line counts for repos with 10,000+ commits.
+- **Workflow runs** load in parallel pages, refresh incrementally and use conditional requests; authenticated 304 responses don't count against the rate limit.
 
 ## Rate limits and tokens
 
 | | Anonymous | With token |
 |---|---|---|
 | Requests per hour | 60 per IP | 5,000 |
-| Runs loaded per period | 300 | 1,000 (GitHub's cap for date-filtered queries) |
-| Failure summaries | Recent failures panel | Also failed rows in the run table |
-| Private repos | No | Yes |
+| Search requests per minute | 10 | 30 |
+| Overview (first visit) | ~7 requests + 5 searches | same |
+| Pull request and issue samples | 100 most recent | 300 most recent |
+| Workflow runs per period | 300 | 1,000 |
+| Private repos and traffic | No | Yes, where the token has access |
 
-An anonymous first visit to a busy repo costs about 10 requests.
-
-To add a token, click **Add token** in the header. A [fine-grained token](https://github.com/settings/personal-access-tokens/new) with read-only **Actions** access is enough. The token is kept in your browser's `localStorage` and only sent to `api.github.com`.
+Click **Add token** in the header to add one. A [fine-grained token](https://github.com/settings/personal-access-tokens/new) with read-only access is enough. It's stored in your browser's `localStorage` and only sent to `api.github.com`.
 
 ## Metric definitions
 
-- **Failed**: conclusion `failure`, `timed_out` or `startup_failure`. Skipped, cancelled, neutral and stale runs are neither passes nor failures.
-- **Success rate**: passed ÷ (passed + failed).
-- **Duration**: workflow elapsed time from start to last update. This differs from GitHub's billed job-minutes.
-- **Previous period**: the comparison is hidden when the page cap stops short of it.
+- **Activity**: weeks with commits among the last 12. 10+ is very active, 6+ active, 1+ occasional. None in 12 weeks but some in the year is quiet; none all year is dormant.
+- **Bus factor**: the fewest people (bots excluded) who account for half of all commits to the default branch.
+- **Time to merge / close**: median time from opening to merge, or to close as completed (not "not planned").
+- **CI on the default branch**: each workflow's latest run that passed or failed. Pull request runs and GitHub-managed dynamic runs are excluded.
+- **Failed runs**: conclusion `failure`, `timed_out` or `startup_failure`. Skipped, cancelled and neutral runs are neither passes nor failures.
 
 ## Development
 
@@ -71,9 +75,7 @@ npm run typecheck
 npm run build
 ```
 
-`AGENTS.md` covers the architecture, request budgets and guardrails.
-
-Pull requests run the same checks in CI and deploy a Vercel preview. `main` deploys to production.
+`AGENTS.md` covers the architecture, request budgets and guardrails. Pull requests run the same checks in CI and deploy a Vercel preview; `main` deploys to production.
 
 ## Licence
 

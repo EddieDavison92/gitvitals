@@ -56,6 +56,15 @@ describe("fetchRuns", () => {
     expect(decodeURIComponent(paths[0])).toContain("created=>=2026-09-01T10:00:00Z");
   });
 
+  it("strips the job id from GitHub-managed dynamic workflow names", async () => {
+    const get = (async () => ({
+      total_count: 1,
+      workflow_runs: [{ ...rawRun(1), event: "dynamic", name: "Graph Update: pip in / #1590783645" }],
+    })) as unknown as Fetcher;
+    const [run] = (await fetchRuns(get, "o", "r", null, 1)).runs;
+    expect(run.workflowName).toBe("Graph Update: pip in /");
+  });
+
   it("maps run fields", async () => {
     const { get } = pagedFetcher(1);
     const [run] = (await fetchRuns(get, "o", "r", null, 1)).runs;
@@ -101,6 +110,12 @@ describe("fetchFailureDetail", () => {
 
   it("falls back to the failed step", async () => {
     const { get } = detailFetcher([failedJob]);
+    expect((await fetchFailureDetail(get, "o", "r", failedRun)).summary).toBe('test: Step "Run tests" failed.');
+  });
+
+  it("explains the failed job, not a sibling cancelled because of it", async () => {
+    const cancelled = { ...failedJob, id: 98, name: "build", conclusion: "cancelled", steps: [] };
+    const { get } = detailFetcher([cancelled, failedJob]);
     expect((await fetchFailureDetail(get, "o", "r", failedRun)).summary).toBe('test: Step "Run tests" failed.');
   });
 

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { mergeRuns, readCache, repoKey, writeCache, type RepoCache } from "./run-cache";
+import { CACHE_VERSION, mergeRuns, readCache, writeCache, type RepoCache } from "./run-cache";
+import { RECENT_REPOS_KEY, touchRecentRepo } from "./storage";
 import { makeRun } from "./test-fixtures";
 
 describe("mergeRuns", () => {
@@ -17,7 +18,7 @@ describe("mergeRuns", () => {
   });
 });
 
-describe("writeCache", () => {
+describe("storage", () => {
   const store = new Map<string, string>();
 
   beforeEach(() => {
@@ -25,6 +26,10 @@ describe("writeCache", () => {
     Object.assign(globalThis, {
       window: {
         localStorage: {
+          get length() {
+            return store.size;
+          },
+          key: (index: number) => Array.from(store.keys())[index] ?? null,
           getItem: (key: string) => store.get(key) ?? null,
           setItem: (key: string, value: string) => void store.set(key, value),
           removeItem: (key: string) => void store.delete(key),
@@ -38,7 +43,7 @@ describe("writeCache", () => {
   });
 
   const cache = (runs = [makeRun()]): RepoCache => ({
-    version: 1,
+    version: CACHE_VERSION,
     runs,
     details: {},
     fetchedAt: 0,
@@ -48,7 +53,7 @@ describe("writeCache", () => {
   });
 
   it("round-trips a cache", () => {
-    writeCache(repoKey("O", "R"), "O/R", cache());
+    writeCache("o/r", cache());
     expect(readCache("o/r")?.runs).toHaveLength(1);
   });
 
@@ -56,17 +61,19 @@ describe("writeCache", () => {
     const runs = Array.from({ length: 1001 }, (_, i) =>
       makeRun({ id: i, createdAt: new Date(Date.UTC(2026, 8, 1) - i * 60_000).toISOString() }),
     );
-    writeCache("o/r", "o/r", cache(runs));
+    writeCache("o/r", cache(runs));
     const saved = readCache("o/r");
     expect(saved?.runs).toHaveLength(1000);
     expect(saved?.coveredSince).toBe(runs[999].createdAt);
     expect(saved?.truncated).toBe(true);
   });
 
-  it("keeps the eight most recent repos", () => {
-    for (let i = 0; i < 9; i += 1) writeCache(`o/r${i}`, `o/r${i}`, cache());
+  it("keeps eight recent repos and clears data for the ones that drop off", () => {
+    writeCache("o/r0", cache());
+    store.set("gv:r:o/r0:meta", "{}");
+    for (let i = 0; i < 9; i += 1) touchRecentRepo(`o/r${i}`);
+    expect(JSON.parse(store.get(RECENT_REPOS_KEY) ?? "[]")).toHaveLength(8);
     expect(readCache("o/r0")).toBeNull();
-    expect(readCache("o/r8")).not.toBeNull();
-    expect(JSON.parse(store.get("gao:recent") ?? "[]")).toHaveLength(8);
+    expect(store.has("gv:r:o/r0:meta")).toBe(false);
   });
 });

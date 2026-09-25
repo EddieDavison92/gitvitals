@@ -2,7 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 
-const KEY = "gao:token";
+const KEY = "gv:token";
 const listeners = new Set<() => void>();
 
 function read() {

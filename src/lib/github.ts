@@ -1,10 +1,21 @@
-import type { ActionsRun, FailureDetail, RateLimit, RunConclusion, RunStatus } from "./types";
+import type {
+  ActionsRun,
+  Annotation,
+  FailureDetail,
+  RateLimit,
+  RepoMeta,
+  RunConclusion,
+  RunJob,
+  RunJobs,
+  RunStatus,
+} from "./types";
 
 const API = "https://api.github.com";
 const PER_PAGE = 100;
 /** Run pages are ~1.7 MB each and slow to generate, so fetch a few at once. */
 const PAGE_CONCURRENCY = 4;
 
+/** Job and step conclusions worth explaining. Broader than a failed run, so cancelled jobs are found too. */
 export const failureConclusions = new Set<RunConclusion>([
   "failure",
   "timed_out",
@@ -36,8 +47,21 @@ type RawRun = {
 type RawJob = {
   id: number;
   name: string;
+  status: RunStatus;
   conclusion: RunConclusion;
-  steps?: Array<{ name: string; number: number; conclusion: RunConclusion }>;
+  html_url: string;
+  started_at: string | null;
+  completed_at: string | null;
+  runner_name?: string | null;
+  labels?: string[];
+  steps?: Array<{
+    name: string;
+    number: number;
+    status: RunStatus;
+    conclusion: RunConclusion;
+    started_at?: string | null;
+    completed_at?: string | null;
+  }>;
 };
 
 type RawAnnotation = {
@@ -46,6 +70,30 @@ type RawAnnotation = {
   title?: string | null;
   path?: string;
   start_line?: number;
+};
+
+type RawRepo = {
+  full_name: string;
+  description: string | null;
+  default_branch: string;
+  private: boolean;
+  archived: boolean;
+  fork: boolean;
+  parent?: { full_name: string };
+  stargazers_count: number;
+  forks_count: number;
+  subscribers_count?: number;
+  open_issues_count: number;
+  language: string | null;
+  license: { spdx_id: string | null; name: string } | null;
+  topics?: string[];
+  homepage: string | null;
+  created_at: string;
+  pushed_at: string;
+  has_issues: boolean;
+  permissions?: { push?: boolean };
+  html_url: string;
+  owner: { avatar_url: string };
 };
 
 export class GitHubError extends Error {
@@ -72,17 +120,28 @@ function readRateLimit(headers: Headers): RateLimit | null {
   return { limit, remaining, resetAt: reset * 1000 };
 }
 
-export type Fetcher = <T>(path: string) => Promise<T>;
+/** "core" for most endpoints; search has its own, smaller per-minute limit. */
+export type RateLimitResource = "core" | "search";
+export type RateLimitListener = (rateLimit: RateLimit, resource: RateLimitResource) => void;
 
-/** Creates a GitHub API fetcher that reports rate-limit headers after every response. */
+export type Fetcher = (<T>(path: string) => Promise<T>) & {
+  /** Like the fetcher, but resolves null for 202 (stats still being computed) and 204. */
+  maybe: <T>(path: string) => Promise<T | null>;
+};
+
+/**
+ * Creates a GitHub API fetcher that reports rate-limit headers after every response.
+ * With `revalidate`, the browser sends If-None-Match and reuses its cached body on
+ * 304; GitHub doesn't count authenticated 304s against the rate limit.
+ */
 export function createFetcher(
   token: string | null,
-  onRateLimit: (rateLimit: RateLimit) => void,
-  signal?: AbortSignal,
+  onRateLimit: RateLimitListener,
+  { revalidate = false }: { revalidate?: boolean } = {},
 ): Fetcher {
-  return async <T>(path: string) => {
+  const request = async <T>(path: string): Promise<T | null> => {
     const res = await fetch(`${API}${path}`, {
-      signal,
+      cache: revalidate ? "no-cache" : "default",
       headers: {
         Accept: "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
@@ -90,29 +149,63 @@ export function createFetcher(
       },
     });
     const rateLimit = readRateLimit(res.headers);
-    if (rateLimit) onRateLimit(rateLimit);
+    if (rateLimit) onRateLimit(rateLimit, res.headers.get("x-ratelimit-resource") === "search" ? "search" : "core");
     if (!res.ok) {
       const body = (await res.json().catch(() => null)) as { message?: string } | null;
       throw new GitHubError(body?.message ?? `GitHub API ${res.status}`, res.status, rateLimit);
     }
+    if (res.status === 202 || res.status === 204) return null;
     return (await res.json()) as T;
   };
+  const get = async <T>(path: string) => (await request<T>(path)) as T;
+  return Object.assign(get, { maybe: request });
 }
 
-/** Reads the current limit without spending a request (/rate_limit is free). */
-export async function fetchRateLimit(token: string | null): Promise<RateLimit | null> {
+export type RateLimits = { core: RateLimit | null; search: RateLimit | null };
+
+/** Reads the current limits without spending a request (/rate_limit is free). */
+export async function fetchRateLimits(token: string | null): Promise<RateLimits | null> {
   try {
     const res = await fetch(`${API}/rate_limit`, {
       cache: "no-store",
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!res.ok) return null;
-    const body = (await res.json()) as { resources: { core: { limit: number; remaining: number; reset: number } } };
-    const core = body.resources.core;
-    return { limit: core.limit, remaining: core.remaining, resetAt: core.reset * 1000 };
+    type Raw = { limit: number; remaining: number; reset: number };
+    const { resources } = (await res.json()) as { resources: { core: Raw; search: Raw } };
+    const map = (raw: Raw) => ({ limit: raw.limit, remaining: raw.remaining, resetAt: raw.reset * 1000 });
+    return { core: map(resources.core), search: map(resources.search) };
   } catch {
     return null;
   }
+}
+
+export async function fetchRepoMeta(get: Fetcher, owner: string, repo: string): Promise<RepoMeta> {
+  const raw = await get<RawRepo>(`/repos/${owner}/${repo}`);
+  const spdx = raw.license?.spdx_id;
+  return {
+    fullName: raw.full_name,
+    description: raw.description,
+    defaultBranch: raw.default_branch,
+    isPrivate: raw.private,
+    isArchived: raw.archived,
+    isFork: raw.fork,
+    parent: raw.parent?.full_name ?? null,
+    stars: raw.stargazers_count,
+    forks: raw.forks_count,
+    watchers: raw.subscribers_count ?? 0,
+    openIssuesAndPulls: raw.open_issues_count,
+    language: raw.language,
+    license: raw.license ? (spdx && spdx !== "NOASSERTION" ? spdx : raw.license.name) : null,
+    topics: raw.topics ?? [],
+    homepage: raw.homepage || null,
+    createdAt: raw.created_at,
+    pushedAt: raw.pushed_at,
+    hasIssues: raw.has_issues,
+    canPush: raw.permissions?.push ?? false,
+    avatarUrl: raw.owner.avatar_url,
+    htmlUrl: raw.html_url,
+  };
 }
 
 function resolveRunTitle(run: RawRun) {
@@ -130,13 +223,16 @@ function workflowNameFromPath(path?: string) {
 
 function toActionsRun(run: RawRun): ActionsRun {
   const startedAt = run.run_started_at ?? run.created_at;
+  const name = run.name || workflowNameFromPath(run.path);
+  // GitHub-managed "dynamic" runs (Dependabot, CodeQL default setup) append a job id; drop it so they group.
+  const workflowName = run.event === "dynamic" ? name.replace(/ #\d+$/, "") : name;
   const start = new Date(startedAt).getTime();
   const end = new Date(run.updated_at).getTime();
   return {
     id: run.id,
     attempt: run.run_attempt ?? 1,
     name: resolveRunTitle(run),
-    workflowName: run.name || workflowNameFromPath(run.path),
+    workflowName,
     branch: run.head_branch ?? "(detached)",
     event: run.event,
     status: run.status,
@@ -154,6 +250,17 @@ function toActionsRun(run: RawRun): ActionsRun {
     failureSummary: null,
     failurePoints: [],
   };
+}
+
+export async function fetchRun(get: Fetcher, owner: string, repo: string, runId: number) {
+  return toActionsRun(await get<RawRun>(`/repos/${owner}/${repo}/actions/runs/${runId}`));
+}
+
+/** Latest runs on one branch (one request); enough to judge its current health. */
+export async function fetchBranchRuns(get: Fetcher, owner: string, repo: string, branch: string) {
+  const params = new URLSearchParams({ branch, per_page: "100", exclude_pull_requests: "true" });
+  const payload = await get<{ workflow_runs: RawRun[] }>(`/repos/${owner}/${repo}/actions/runs?${params}`);
+  return payload.workflow_runs.map(toActionsRun);
 }
 
 /** GitHub's `created` filter rejects fractional seconds. */
@@ -197,61 +304,96 @@ export async function fetchRuns(
   return { runs, truncated: first.total_count > lastPage * PER_PAGE };
 }
 
+function toRunJob(job: RawJob): RunJob {
+  return {
+    id: job.id,
+    name: job.name,
+    status: job.status,
+    conclusion: job.conclusion,
+    url: job.html_url,
+    startedAt: job.started_at,
+    completedAt: job.completed_at,
+    runnerName: job.runner_name ?? null,
+    labels: job.labels ?? [],
+    steps: (job.steps ?? []).map((step) => ({
+      name: step.name,
+      number: step.number,
+      status: step.status,
+      conclusion: step.conclusion,
+      startedAt: step.started_at ?? null,
+      completedAt: step.completed_at ?? null,
+    })),
+  };
+}
+
 const NOISE_ANNOTATION = /^Process completed with exit code \d+\.?$/i;
 
-function firstLine(text: string) {
-  return text.split("\n").map((line) => line.trim()).find(Boolean) ?? text.trim();
+function toAnnotation(raw: RawAnnotation): Annotation {
+  const message = raw.message.split("\n").map((line) => line.trim()).find(Boolean) ?? raw.message.trim();
+  const hasFile = raw.path && raw.path !== ".github";
+  return {
+    level: raw.annotation_level,
+    message: message.slice(0, 240),
+    title: raw.title || null,
+    location: hasFile ? `${raw.path}${raw.start_line ? `:${raw.start_line}` : ""}` : null,
+  };
+}
+
+/** Failure annotations minus "exit code 1" noise, de-duplicated. */
+export function failureMessages(annotations: Annotation[]) {
+  const messages = annotations
+    .filter((item) => item.level === "failure" && !NOISE_ANNOTATION.test(item.message))
+    .map((item) => (item.location ? `${item.location} ${item.message}` : item.message));
+  return Array.from(new Set(messages));
 }
 
 /**
- * Builds a failure summary from the first failed job: its failed step plus any
- * failure annotations (compiler errors, test failures, `::error::` output).
- * Costs two requests: jobs, then annotations for that job.
+ * Jobs for a run attempt, plus annotations for up to `annotateFailed` failed
+ * jobs (cancelled and timed-out jobs have none worth fetching).
  */
-export async function fetchFailureDetail(
+export async function fetchRunJobs(
   get: Fetcher,
   owner: string,
   repo: string,
-  run: ActionsRun,
-): Promise<FailureDetail> {
+  run: Pick<ActionsRun, "id" | "attempt">,
+  annotateFailed: number,
+): Promise<RunJobs> {
+  const { jobs: rawJobs } = await get<{ jobs: RawJob[] }>(
+    `/repos/${owner}/${repo}/actions/runs/${run.id}/attempts/${run.attempt}/jobs?per_page=100`,
+  );
+  const jobs = rawJobs.map(toRunJob);
+  const toAnnotate = jobs.filter((job) => job.conclusion === "failure").slice(0, annotateFailed);
+  const annotations: Record<number, Annotation[]> = {};
+  await Promise.all(
+    toAnnotate.map(async (job) => {
+      const raw = await get<RawAnnotation[]>(`/repos/${owner}/${repo}/check-runs/${job.id}/annotations?per_page=50`).catch(
+        () => [] as RawAnnotation[],
+      );
+      annotations[job.id] = raw.map(toAnnotation);
+    }),
+  );
+  return { jobs, annotations };
+}
+
+/** One-line explanation of a failed run from its first failed job. */
+export function summarizeFailure(run: ActionsRun, { jobs, annotations }: RunJobs): FailureDetail {
   if (run.conclusion === "startup_failure") {
     return { summary: "Workflow failed to start. Check the workflow file for errors.", points: [] };
   }
-
-  const { jobs } = await get<{ jobs: RawJob[] }>(
-    `/repos/${owner}/${repo}/actions/runs/${run.id}/attempts/${run.attempt}/jobs?per_page=100`,
-  );
-  const job = jobs.find((item) => failureConclusions.has(item.conclusion));
+  // Prefer the job that actually failed over siblings cancelled because of it.
+  const job =
+    jobs.find((item) => item.conclusion === "failure") ??
+    jobs.find((item) => failureConclusions.has(item.conclusion));
   if (!job) {
     return { summary: `Run ended with ${run.conclusion ?? "no conclusion"}.`, points: [] };
   }
 
-  const failedStep = job.steps?.find((step) => failureConclusions.has(step.conclusion));
+  const failedStep = job.steps.find((step) => failureConclusions.has(step.conclusion));
   const stepLabel = failedStep ? ` at step "${failedStep.name}"` : "";
+  if (job.conclusion === "cancelled") return { summary: `${job.name}: Cancelled${stepLabel}.`, points: [] };
+  if (job.conclusion === "timed_out") return { summary: `${job.name}: Timed out${stepLabel}.`, points: [] };
 
-  if (job.conclusion === "cancelled") {
-    return { summary: `${job.name}: Cancelled${stepLabel}.`, points: [] };
-  }
-  if (job.conclusion === "timed_out") {
-    return { summary: `${job.name}: Timed out${stepLabel}.`, points: [] };
-  }
-
-  const annotations = await get<RawAnnotation[]>(
-    `/repos/${owner}/${repo}/check-runs/${job.id}/annotations?per_page=50`,
-  ).catch(() => [] as RawAnnotation[]);
-  const messages = Array.from(
-    new Set(
-      annotations
-        .filter((item) => item.annotation_level === "failure")
-        .map((item) => {
-          const message = firstLine(item.message);
-          const location = item.path && item.path !== ".github" ? `${item.path}${item.start_line ? `:${item.start_line}` : ""} ` : "";
-          return `${location}${message}`.slice(0, 240);
-        })
-        .filter((message) => !NOISE_ANNOTATION.test(message)),
-    ),
-  );
-
+  const messages = failureMessages(annotations[job.id] ?? []);
   if (messages.length > 0) {
     return {
       summary: `${job.name}: ${messages[0]}`,
@@ -263,4 +405,15 @@ export async function fetchFailureDetail(
     ? `${job.name}: Step "${failedStep.name}" failed.`
     : `${job.name}: Job ended with ${job.conclusion}.`;
   return { summary, points: [summary] };
+}
+
+/** Failure summary for a run. Costs two requests: jobs, then annotations for the first failed job. */
+export async function fetchFailureDetail(
+  get: Fetcher,
+  owner: string,
+  repo: string,
+  run: ActionsRun,
+): Promise<FailureDetail> {
+  if (run.conclusion === "startup_failure") return summarizeFailure(run, { jobs: [], annotations: {} });
+  return summarizeFailure(run, await fetchRunJobs(get, owner, repo, run, 1));
 }

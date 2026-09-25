@@ -1,0 +1,139 @@
+"use client";
+
+import { ChartCard, SERIES } from "@/components/ui/charts";
+import { EmptyState, Meter, PageHeader, Panel, ResourceNote, Skeleton, StatCell, StatGrid } from "@/components/ui/primitives";
+import { formatCount, formatPercent, formatSpan } from "@/lib/format";
+import { authorMix, bucketAges, bucketDurations, closeDurations, cohorts, durationSummary, largerSample, topAuthors, topLabels } from "@/lib/insights";
+import { useFlow, useIssues, useOldestOpen } from "@/lib/repo-data";
+import { useToken } from "@/lib/token-store";
+import type { RepoMeta } from "@/lib/types";
+import { useNow } from "@/lib/use-now";
+import { AuthorMixPanel, BucketChart, CohortChart, ItemList, sampleDescription, SeriesLegend, type Series } from "./flow-parts";
+
+const STATES: Series[] = [
+  { key: "completed", label: "Completed", color: SERIES.ok },
+  { key: "notPlanned", label: "Not planned", color: SERIES.idle },
+  { key: "open", label: "Open", color: SERIES.info },
+];
+
+export function IssuesTab({ owner, repo, meta }: { owner: string; repo: string; meta: RepoMeta | null }) {
+  const now = useNow(60_000);
+  const hasToken = useToken() !== null;
+  const issues = useIssues(owner, repo);
+  const flow = useFlow(owner, repo);
+  const oldest = useOldestOpen(owner, repo, "issue");
+
+  if (meta && !meta.hasIssues) {
+    return (
+      <>
+        <PageHeader title="Issues" />
+        <EmptyState icon="issue" title="Issues are turned off for this repository" className="py-24" />
+      </>
+    );
+  }
+
+  const sample = issues.data ?? [];
+  const close30 = durationSummary(flow.data?.completed.durations ?? []);
+  const closed = sample.filter((issue) => issue.state === "closed");
+  const open = sample.filter((issue) => issue.state === "open");
+  const labels = topLabels(sample, 10);
+  const unlabeled = open.filter((issue) => issue.labels.length === 0).length;
+  const flowLoading = flow.loading && !flow.data;
+  const sampleLoading = issues.loading && !issues.data;
+  const stateOf = (issue: (typeof sample)[number]) => (issue.state === "open" ? "open" : issue.notPlanned ? "notPlanned" : "completed");
+  const sampleNote = sampleDescription(sample.length, "issues", sample.at(-1)?.createdAt ?? null);
+
+  return (
+    <>
+      <PageHeader
+        title="Issues"
+        description={`Counts cover the last 30 days; charts use ${sampleNote ?? "recent issues"}.${hasToken ? "" : " Add a token to sample 300."}`}
+      />
+
+      <StatGrid className="grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+        <StatCell label="Open" value={flow.data ? formatCount(flow.data.openIssues) : "–"} loading={flowLoading} error={flow.data ? null : flow.error} />
+        <StatCell label="Opened, 30 days" value={flow.data ? formatCount(flow.data.openedIssues) : "–"} loading={flowLoading} />
+        <StatCell label="Completed, 30 days" value={flow.data ? formatCount(flow.data.completed.total) : "–"} loading={flowLoading} />
+        <StatCell
+          label="Median time to close"
+          value={close30 ? formatSpan(close30.median) : "–"}
+          loading={flowLoading}
+          sub={close30 ? `90% within ${formatSpan(close30.p90)}` : "None completed in 30 days"}
+        />
+        <StatCell
+          label="Not planned"
+          value={closed.length > 0 ? formatPercent(closed.filter((issue) => issue.notPlanned).length / closed.length) : "–"}
+          loading={sampleLoading}
+          sub="Of closed issues"
+        />
+        <StatCell label="Unlabelled" value={open.length > 0 ? formatPercent(unlabeled / open.length) : "–"} loading={sampleLoading} sub="Of open issues in the sample" />
+      </StatGrid>
+      <ResourceNote error={issues.data ? null : issues.error} onRetry={issues.reload} />
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <ChartCard title="Opened" description="By when they were opened, split by outcome" action={<SeriesLegend series={STATES} />}>
+          {sampleLoading ? (
+            <Skeleton className="h-60" />
+          ) : (
+            <CohortChart cohorts={cohorts(sample, stateOf, STATES.map((item) => item.key), 26, now)} series={STATES} />
+          )}
+        </ChartCard>
+        <ChartCard title="Time to close" description="How long completed issues were open">
+          {sampleLoading && flowLoading ? (
+            <Skeleton className="h-60" />
+          ) : (
+            <BucketChart buckets={bucketDurations(largerSample(closeDurations(sample), flow.data?.completed.durations ?? []))} color={SERIES.info} />
+          )}
+        </ChartCard>
+      </div>
+
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+        <Panel title="Labels on open issues" description="In the sample">
+          {sampleLoading ? (
+            <Skeleton className="m-4 h-40" />
+          ) : labels.length === 0 ? (
+            <p className="p-4 text-[13px] text-fg-muted">No labels on open issues.</p>
+          ) : (
+            <ul className="space-y-2.5 p-4">
+              {labels.map((label) => (
+                <li key={label.name}>
+                  <div className="flex items-baseline justify-between gap-3 text-[13px]">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className="size-2 shrink-0 rounded-full" style={{ background: label.color }} />
+                      <span className="truncate text-fg-2">{label.name}</span>
+                    </span>
+                    <span className="font-mono text-xs text-fg-muted tabular-nums">{label.count}</span>
+                  </div>
+                  <Meter value={label.count / labels[0].count} tone="idle" className="mt-1.5" />
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+        <ChartCard title="Open issue age" description="How long open issues in the sample have waited">
+          {sampleLoading ? <Skeleton className="h-60" /> : <BucketChart buckets={bucketAges(open.map((issue) => issue.createdAt), now)} color={SERIES.warn} />}
+        </ChartCard>
+        <AuthorMixPanel title="Who opens issues" mix={authorMix(sample)} top={topAuthors(sample, 8)} />
+      </div>
+
+      <div className="grid items-start gap-5 xl:grid-cols-2">
+        <ItemList
+          title="Waiting longest"
+          description="Oldest issues still open"
+          resource={oldest}
+          now={now}
+          empty="No open issues."
+          items={oldest.data ?? []}
+        />
+        <ItemList
+          title="Most discussed"
+          description="Open issues in the sample by comment count"
+          resource={issues}
+          now={now}
+          empty="No open issues in the sample."
+          items={[...open].sort((a, b) => b.comments - a.comments).slice(0, 10)}
+        />
+      </div>
+    </>
+  );
+}
