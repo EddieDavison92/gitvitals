@@ -9,14 +9,16 @@ import { toLoadError, useRepoRuns, type LoadError } from "@/lib/repo-store";
 import { isFailedRun } from "@/lib/run-status";
 import { branchHealth, dailyTrend, inferDefaultBranch, summarizeRuns, workflowStats } from "@/lib/stats";
 import type { ActionsRun, RepoMeta } from "@/lib/types";
-import { Overview } from "./overview";
+import { PageBody } from "@/components/shell/app-shell";
+import { EmptyState, PageHeader, Panel } from "@/components/ui/primitives";
+import { DOT } from "@/components/ui/tones";
+import { headline, Overview } from "./overview";
 import { RecentFailures, ReliabilityWatch } from "./panels";
 import { RunDrawer } from "./run-drawer";
 import { RunExplorer, runMatchesView } from "./run-explorer";
 import { ActionsError, ActionsLoading, describeError } from "./states";
-import { Toolbar } from "./toolbar";
+import { ActionsControls, activeFilterCount, FilterPanel } from "./toolbar";
 import { Trends } from "./trends";
-import { EmptyState } from "@/components/ui/primitives";
 import { useDashboardState } from "./use-dashboard-state";
 
 const PAGE_SIZE = 25;
@@ -40,6 +42,7 @@ export function ActionsDashboard({
 }) {
   const [state, update] = useDashboardState(initialState);
   const [showAllFailures, setShowAllFailures] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(() => activeFilterCount(initialState) > 0);
   const [pagination, setPagination] = useState({ key: "", count: PAGE_SIZE });
   const [runLoadError, setRunLoadError] = useState<{ id: number; error: LoadError } | null>(null);
   const attemptedRuns = useRef(new Set<number>());
@@ -188,11 +191,8 @@ export function ActionsDashboard({
     setShowAllFailures(false);
   };
 
-  if (!loadedRuns) {
-    return error ? <ActionsError error={error} /> : <ActionsLoading />;
-  }
-
   const periodLabel = PERIOD_OPTIONS.find((option) => option.value === state.period)?.label ?? "";
+  const status = headline(summary, health, defaultBranch, liveCount);
   const drawer =
     state.run !== null ? (
       <RunDrawer
@@ -206,109 +206,127 @@ export function ActionsDashboard({
     ) : null;
 
   return (
-    <>
-      <Toolbar
-        state={{ ...state, ...filters }}
-        update={update}
-        options={options}
-        onClear={clearFilters}
-        status={{ fetchedAt, loading, liveCount, refreshMs, onRefresh: refresh }}
+    <PageBody>
+      <PageHeader
+        title="Actions"
+        description={
+          loadedRuns ? (
+            <span className="flex items-center gap-1.5">
+              <span className={`size-1.5 rounded-full ${DOT[status.tone]}`} />
+              {status.text}
+              <span className="text-fg-subtle">
+                · {periodLabel}
+                {hasFilters ? " · filtered" : ""}
+              </span>
+            </span>
+          ) : (
+            "Workflow runs from GitHub Actions"
+          )
+        }
+        actions={
+          <ActionsControls
+            state={{ ...state, ...filters }}
+            update={update}
+            status={{ fetchedAt, loading, liveCount, refreshMs, onRefresh: refresh }}
+            filtersOpen={filtersOpen}
+            onToggleFilters={() => setFiltersOpen((open) => !open)}
+          />
+        }
       />
+      {filtersOpen && <FilterPanel state={{ ...state, ...filters }} update={update} options={options} onClear={clearFilters} />}
 
-      <div className="mx-auto max-w-[1480px] space-y-6 px-4 py-5 sm:px-6 sm:py-7 lg:px-8">
-        {error && (
-          <Banner tone="warn" icon="warning">
-            {describeError(error)} Showing runs loaded {fetchedAt ? formatTime(fetchedAt) : "earlier"}.
-          </Banner>
-        )}
-        {!isLoadedFrom(currentStartMs) && coveredSince && (
-          <Banner tone="idle" icon="clock">
-            Only runs since {formatTime(coveredSince)} are loaded ({runs.length} runs).
-            {hasToken ? " That's the most this dashboard fetches." : " Add a token to load up to 1,000 runs."}
-          </Banner>
-        )}
-
-        {runs.length === 0 ? (
-          <div className="rounded-2xl border border-line bg-surface">
-            <EmptyState icon="workflow" title="No workflow runs found">
-              {state.period === "all" ? (
-                "This repository hasn't run any GitHub Actions workflows."
-              ) : (
-                <>
-                  Nothing ran in the last {periodLabel.replace("Last ", "").toLowerCase()} or the period before.
-                  <button
-                    type="button"
-                    onClick={() => update({ period: "all" })}
-                    className="mt-3 block w-full text-xs font-semibold text-info-fg hover:underline"
-                  >
-                    Load the latest runs instead
-                  </button>
-                </>
-              )}
-            </EmptyState>
-          </div>
+      {!loadedRuns ? (
+        error ? (
+          <ActionsError error={error} />
         ) : (
-          <>
-            <Overview
-              summary={summary}
-              successRateDelta={successRateDelta}
-              recentFailures={recentFailures.length}
-              health={health}
-              branch={defaultBranch}
-              liveCount={liveCount}
-              periodLabel={periodLabel}
-              filtered={hasFilters}
-              onOpenRun={openRun}
-              onSelectWorkflow={(workflow) => update({ workflow })}
-            />
+          <ActionsLoading />
+        )
+      ) : (
+        <>
+          {error && (
+            <Banner tone="warn" icon="warning">
+              {describeError(error)} Showing runs loaded {fetchedAt ? formatTime(fetchedAt) : "earlier"}.
+            </Banner>
+          )}
+          {!isLoadedFrom(currentStartMs) && coveredSince && (
+            <Banner tone="idle" icon="clock">
+              Only runs since {formatTime(coveredSince)} are loaded ({runs.length} runs).
+              {hasToken ? " That's the most this dashboard fetches." : " Add a token to load up to 1,000 runs."}
+            </Banner>
+          )}
 
-            <section aria-label="Attention" className="grid items-start gap-4 xl:grid-cols-[minmax(0,1.65fr)_minmax(320px,0.85fr)]">
-              <RecentFailures
-                failures={recentFailures}
-                showAll={showAllFailures}
-                onToggleShowAll={() => setShowAllFailures((current) => !current)}
+          {runs.length === 0 ? (
+            <Panel>
+              <EmptyState icon="workflow" title="No workflow runs found" className="py-16">
+                {state.period === "all" ? (
+                  "This repository hasn't run any GitHub Actions workflows."
+                ) : (
+                  <>
+                    Nothing ran in the last {periodLabel.replace("Last ", "").toLowerCase()} or the period before.
+                    <button type="button" onClick={() => update({ period: "all" })} className="mt-2 block w-full text-info-fg hover:underline">
+                      Load the latest runs instead
+                    </button>
+                  </>
+                )}
+              </EmptyState>
+            </Panel>
+          ) : (
+            <>
+              <Overview
+                summary={summary}
+                successRateDelta={successRateDelta}
+                recentFailures={recentFailures.length}
+                health={health}
+                branch={defaultBranch}
                 onOpenRun={openRun}
+                onSelectWorkflow={(workflow) => update({ workflow })}
               />
-              <ReliabilityWatch stats={stats} selected={filters.workflow} onSelect={(workflow) => update({ workflow })} />
-            </section>
 
-            <Trends daily={daily} workflows={stats} />
+              <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+                <RecentFailures
+                  failures={recentFailures}
+                  showAll={showAllFailures}
+                  onToggleShowAll={() => setShowAllFailures((current) => !current)}
+                  onOpenRun={openRun}
+                />
+                <ReliabilityWatch stats={stats} selected={filters.workflow} onSelect={(workflow) => update({ workflow })} />
+              </div>
 
-            <RunExplorer
-              scopedRuns={scopedRuns}
-              runs={explorerRuns}
-              view={state.view}
-              onViewChange={(view) => update({ view })}
-              query={state.q}
-              onQueryChange={(q) => update({ q })}
-              visibleCount={visibleRunCount}
-              onLoadMore={() => setPagination({ key: paginationKey, count: visibleRunCount + PAGE_SIZE })}
-              hasFilters={hasFilters}
-              onClear={clearFilters}
-              onOpenRun={openRun}
-              onSelectPr={(pr) => update({ pr: String(pr) })}
-            />
-          </>
-        )}
+              <Trends daily={daily} workflows={stats} />
 
-        <footer className="flex flex-col justify-between gap-2 border-t border-line py-4 text-xs text-fg-subtle sm:flex-row">
-          <span>
-            Loaded from the GitHub API in your browser. Refreshes every{" "}
-            {refreshMs < 60_000 ? `${refreshMs / 1000} seconds` : refreshMs === 60_000 ? "minute" : `${refreshMs / 60_000} minutes`}
-            {liveCount > 0 ? " while runs are active" : ""}.
-          </span>
-          <span>Duration is workflow elapsed time, not billed job-minutes.</span>
-        </footer>
-      </div>
+              <RunExplorer
+                scopedRuns={scopedRuns}
+                runs={explorerRuns}
+                view={state.view}
+                onViewChange={(view) => update({ view })}
+                query={state.q}
+                onQueryChange={(q) => update({ q })}
+                visibleCount={visibleRunCount}
+                onLoadMore={() => setPagination({ key: paginationKey, count: visibleRunCount + PAGE_SIZE })}
+                hasFilters={hasFilters}
+                onClear={clearFilters}
+                onOpenRun={openRun}
+                onSelectPr={(pr) => update({ pr: String(pr) })}
+              />
+
+              <p className="text-xs text-fg-subtle">
+                Refreshes every{" "}
+                {refreshMs < 60_000 ? `${refreshMs / 1000} seconds` : refreshMs === 60_000 ? "minute" : `${refreshMs / 60_000} minutes`}
+                {liveCount > 0 ? " while runs are active" : ""}. Duration is workflow elapsed time, not billed job-minutes.
+              </p>
+            </>
+          )}
+        </>
+      )}
       {drawer}
-    </>
+    </PageBody>
   );
 }
 
 function Banner({ tone, icon, children }: { tone: "warn" | "idle"; icon: "warning" | "clock"; children: React.ReactNode }) {
   return (
     <div
-      className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm ${
+      className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-[13px] ${
         tone === "warn" ? "border-warn-line bg-warn-soft text-warn-fg" : "border-line bg-surface text-fg-muted"
       }`}
     >

@@ -9,10 +9,11 @@ gitvitals shows the health of any GitHub repository. Next.js serves the pages; e
 - `src/app/page.tsx`: landing page
 - `src/app/[owner]/[repo]/[[...rest]]/page.tsx`: repo pages; `resolveRepoPath` (`src/lib/routes.ts`) maps the path to a tab and redirects GitHub-style paths
 - `src/app/compare/page.tsx`: side-by-side comparison
-- `src/components/repo/`: shell (identity, tab nav) and one component per tab
+- `src/components/shell/`: app layout (sidebar with repo switcher and nav, top bar with breadcrumbs, page body)
+- `src/components/repo/`: repo page wrapper and one component per tab
 - `src/components/actions/`: the Actions tab (CI dashboard, run drawer)
 - `src/components/compare/`: comparison table
-- `src/components/ui/`: shared primitives, chart helpers and tone classes
+- `src/components/ui/`: shared primitives (`Panel`, `StatGrid`, `Badge`, table classes), chart helpers and tone classes. Use these rather than ad hoc cards; colour is for status only.
 
 ## Data layer
 

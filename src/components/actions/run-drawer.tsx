@@ -9,8 +9,8 @@ import { failureHeadline, isActiveRun, isFailedRun, spanMs, statusLabel, toneOf 
 import type { ActionsRun, RunJob, RunJobs } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
 import { describeError } from "./states";
-import { BADGE, DOT, TEXT } from "@/components/ui/tones";
-import { RelativeTime } from "@/components/ui/primitives";
+import { DOT, TEXT } from "@/components/ui/tones";
+import { BUTTON, RelativeTime } from "@/components/ui/primitives";
 import { AttemptBadge, LiveDuration, StatusBadge } from "./run-ui";
 
 /** Side panel with a run's details, jobs, steps and failure annotations. */
@@ -49,21 +49,21 @@ export function RunDrawer({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px] animate-[fade-in_150ms_ease-out]" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30 animate-[fade-in_120ms_ease-out]" onClick={onClose} />
       <aside
         role="dialog"
         aria-modal="true"
         aria-labelledby="run-drawer-title"
-        className="relative flex h-full w-full max-w-[640px] flex-col border-l border-line bg-canvas shadow-2xl animate-[drawer-in_180ms_ease-out]"
+        className="relative flex h-full w-full max-w-[720px] flex-col border-l border-line bg-surface shadow-2xl shadow-black/20 animate-[drawer-in_160ms_ease-out]"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-line bg-surface px-5 py-3">
+        <div className="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-line px-4">
           <div className="flex min-w-0 items-center gap-2">
             {run && <StatusBadge run={run} />}
-            <p id="run-drawer-title" className="truncate text-sm font-semibold text-fg">
+            <p id="run-drawer-title" className="truncate text-[13px] font-medium text-fg">
               {run ? (
                 <>
                   {run.workflowName}
-                  <span className="ml-1.5 font-mono text-xs font-medium text-fg-subtle">#{run.runNumber}</span>
+                  <span className="ml-1.5 font-mono text-xs text-fg-subtle">#{run.runNumber}</span>
                 </>
               ) : (
                 "Loading run…"
@@ -77,10 +77,10 @@ export function RunDrawer({
                 href={run.url}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-info-fg hover:bg-info-soft"
+                className={`${BUTTON} h-7 text-xs`}
               >
                 GitHub
-                <Icon name="arrow-up-right" className="size-3.5" />
+                <Icon name="arrow-up-right" className="size-3" />
               </a>
             )}
             <button
@@ -88,25 +88,25 @@ export function RunDrawer({
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="grid size-8 place-items-center rounded-lg text-fg-muted hover:bg-surface-3 hover:text-fg"
+              className="grid size-7 place-items-center rounded-md text-fg-muted hover:bg-surface-3 hover:text-fg"
             >
               <Icon name="x" className="size-4" />
             </button>
           </div>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
+        <div className="flex-1 space-y-4 overflow-y-auto p-4">
           {runError ? (
-            <p className={`rounded-xl border px-4 py-3 text-sm ${BADGE.warn}`}>{describeError(runError)}</p>
+            <p className="rounded-md border border-warn-line bg-warn-soft px-3 py-2 text-[13px] text-warn-fg">{describeError(runError)}</p>
           ) : !run ? (
             <DrawerSkeleton />
           ) : (
             <>
               <RunFacts run={run} jobs={jobs} onSelectBranch={onSelectBranch} />
               {isFailedRun(run) && failureHeadline(run) && (
-                <div className={`rounded-xl border px-4 py-3 ${BADGE.bad}`}>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.14em] opacity-80">Why it failed</p>
-                  <p className="mt-1 text-sm font-medium">{failureHeadline(run)}</p>
+                <div className="rounded-md border border-bad-line bg-bad-soft px-3 py-2">
+                  <p className="text-xs font-medium text-bad-fg">Failure</p>
+                  <p className="mt-0.5 text-[13px] text-fg">{failureHeadline(run)}</p>
                 </div>
               )}
               <JobsSection run={run} jobs={jobs} error={jobsError} loading={loading && !jobs} />
@@ -138,7 +138,7 @@ function RunFacts({
   const facts: Array<[string, React.ReactNode]> = [
     [
       "Branch",
-      <button key="branch" type="button" onClick={() => onSelectBranch(run.branch)} className="truncate font-mono text-info-fg hover:underline">
+      <button key="branch" type="button" onClick={() => onSelectBranch(run.branch)} className="truncate font-mono text-fg hover:underline">
         {run.branch}
       </button>,
     ],
@@ -148,7 +148,7 @@ function RunFacts({
       "Pull request",
       run.prNumbers.length > 0
         ? run.prNumbers.map((pr) => (
-            <a key={pr} href={`${run.url.split("/actions/")[0]}/pull/${pr}`} target="_blank" rel="noreferrer" className="mr-2 text-info-fg hover:underline">
+            <a key={pr} href={`${run.url.split("/actions/")[0]}/pull/${pr}`} target="_blank" rel="noreferrer" className="mr-2 text-fg hover:underline">
               #{pr}
             </a>
           ))
@@ -162,12 +162,12 @@ function RunFacts({
 
   return (
     <div>
-      <h2 className="text-lg font-semibold leading-snug tracking-tight text-fg">{run.name}</h2>
-      <dl className="mt-4 grid grid-cols-2 gap-x-4 gap-y-3 rounded-xl border border-line bg-surface p-4 sm:grid-cols-4">
+      <h2 className="text-[15px] font-medium leading-snug text-fg">{run.name}</h2>
+      <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-4">
         {facts.map(([label, value]) => (
-          <div key={label} className="min-w-0">
-            <dt className="text-[10px] font-semibold uppercase tracking-[0.13em] text-fg-subtle">{label}</dt>
-            <dd className="mt-0.5 truncate text-sm text-fg-2">{value}</dd>
+          <div key={label} className="min-w-0 bg-surface px-3 py-2">
+            <dt className="text-[11px] text-fg-muted">{label}</dt>
+            <dd className="mt-0.5 truncate text-[13px] text-fg-2">{value}</dd>
           </div>
         ))}
       </dl>
@@ -187,10 +187,10 @@ function JobsSection({
   loading: boolean;
 }) {
   const now = useNow(1000, isActiveRun(run));
-  if (error) return <p className={`rounded-xl border px-4 py-3 text-sm ${BADGE.warn}`}>{describeError(error)}</p>;
+  if (error) return <p className="rounded-md border border-warn-line bg-warn-soft px-3 py-2 text-[13px] text-warn-fg">{describeError(error)}</p>;
   if (loading || !jobs) return <DrawerSkeleton rows={4} />;
   if (jobs.jobs.length === 0) {
-    return <p className="text-sm text-fg-muted">No jobs ran for this attempt.</p>;
+    return <p className="text-[13px] text-fg-muted">No jobs ran for this attempt.</p>;
   }
 
   // Waterfall bounds: first job start to last job end (or now while running).
@@ -203,13 +203,13 @@ function JobsSection({
   return (
     <section>
       <div className="mb-2 flex items-baseline justify-between gap-3">
-        <h3 className="text-sm font-semibold text-fg">Jobs</h3>
+        <h3 className="text-[13px] font-medium text-fg">Jobs</h3>
         <p className="text-xs text-fg-muted">
           {plural(jobs.jobs.length, "job")}
           {failed > 0 && <span className={TEXT.bad}> · {failed} failed</span>}
         </p>
       </div>
-      <ul className="overflow-hidden rounded-xl border border-line bg-surface">
+      <ul className="overflow-hidden rounded-md border border-line">
         {jobs.jobs.map((job) => (
           <JobRow
             key={job.id}
@@ -245,16 +245,16 @@ function JobRow({
 
   return (
     <li className="border-b border-line-soft last:border-b-0">
-      <button type="button" onClick={() => setOpen((current) => !current)} aria-expanded={open} className="w-full px-4 py-3 text-left hover:bg-surface-2">
+      <button type="button" onClick={() => setOpen((current) => !current)} aria-expanded={open} className="w-full px-3 py-2 text-left hover:bg-surface-2">
         <span className="flex items-center gap-2.5">
           <Icon name="chevron" className={`size-3.5 shrink-0 text-fg-subtle transition ${open ? "rotate-90" : ""}`} />
           <span className={`size-2 shrink-0 rounded-full ${DOT[tone]} ${tone === "warn" ? "animate-pulse" : ""}`} />
-          <span className="min-w-0 flex-1 truncate text-sm font-medium text-fg">{job.name}</span>
+          <span className="min-w-0 flex-1 truncate text-[13px] text-fg">{job.name}</span>
           <span className="shrink-0 font-mono text-[11px] text-fg-muted tabular-nums">
             {duration === null ? statusLabel(job) : formatDuration(duration)}
           </span>
         </span>
-        <span className="mt-2 ml-6 block h-1.5 overflow-hidden rounded-full bg-surface-3" aria-hidden="true">
+        <span className="mt-1.5 ml-6 block h-1 overflow-hidden rounded-full bg-surface-3" aria-hidden="true">
           <span
             className={`block h-full rounded-full ${DOT[tone]} opacity-70`}
             style={{ marginLeft: `${Math.min(offset, 1) * 100}%`, width: `${Math.max(Math.min(width, 1 - offset), 0.01) * 100}%` }}
@@ -263,9 +263,9 @@ function JobRow({
       </button>
 
       {open && (
-        <div className="space-y-3 px-4 pb-4 pl-10">
+        <div className="space-y-3 px-3 pb-3 pl-9">
           {messages.length > 0 && (
-            <ul className={`space-y-1.5 rounded-lg border px-3 py-2.5 text-xs ${BADGE.bad}`}>
+            <ul className="space-y-1 rounded border border-bad-line bg-bad-soft px-2.5 py-2 text-xs text-bad-fg">
               {messages.slice(0, 5).map((message) => (
                 <li key={message} className="font-mono leading-5 break-words">
                   {message}
@@ -296,7 +296,7 @@ function JobRow({
             {job.runnerName && <span>Runner {job.runnerName}</span>}
             {job.labels.length > 0 && <span className="font-mono">{job.labels.join(", ")}</span>}
             {job.startedAt && <span title={formatTime(job.startedAt)}>Started {formatTime(job.startedAt)}</span>}
-            <a href={job.url} target="_blank" rel="noreferrer" className="font-semibold text-info-fg hover:underline">
+            <a href={job.url} target="_blank" rel="noreferrer" className="font-medium text-fg-muted hover:text-fg hover:underline">
               Logs
             </a>
           </div>
@@ -310,7 +310,7 @@ function DrawerSkeleton({ rows = 3 }: { rows?: number }) {
   return (
     <div className="space-y-2" aria-hidden="true">
       {Array.from({ length: rows }, (_, index) => (
-        <div key={index} className="h-12 animate-pulse rounded-xl bg-surface-3" />
+        <div key={index} className="h-10 animate-pulse rounded-md bg-surface-3" />
       ))}
     </div>
   );

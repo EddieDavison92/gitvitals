@@ -139,6 +139,8 @@ describe("run status", () => {
     ]);
     expect(runTone(makeRun({ conclusion: "timed_out" }))).toBe("bad");
     expect(runTone(makeRun({ status: "queued", conclusion: null }))).toBe("warn");
+    expect(statusLabel(makeRun({ status: "waiting", conclusion: null }))).toBe("Waiting");
+    expect(statusLabel(makeRun({ status: "pending", conclusion: null }))).toBe("Queued");
   });
 
   it("counts elapsed time up for active runs", () => {

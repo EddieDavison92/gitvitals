@@ -4,94 +4,108 @@
 
 /*
  * Semantic colour tokens. Components use these (bg-surface, text-fg-muted,
- * bg-bad-soft …) rather than raw palette classes so dark mode is one switch.
- * Status tones: ok = passed, bad = failed, warn = running/attention,
+ * text-bad-fg …) rather than raw palette classes so both themes come from one
+ * switch. Neutrals are zinc; colour is reserved for status and one accent.
+ * Tones: ok = passed, bad = failed, warn = running/attention,
  * info = accent, idle = skipped/cancelled/neutral.
  */
 :root {
   color-scheme: light;
-  --canvas: #f4f6f9;
+  --canvas: #fafafa;
   --surface: #ffffff;
-  --surface-2: #f8fafc;
-  --surface-3: #f1f5f9;
-  --line: #e2e8f0;
-  --line-soft: #f1f5f9;
-  --fg: #0f172a;
-  --fg-2: #334155;
-  --fg-muted: #64748b;
-  --fg-subtle: #94a3b8;
-  --chrome: #0b1220;
+  --surface-2: #f7f7f8;
+  --surface-3: #efeff1;
+  --line: #e4e4e7;
+  --line-soft: #f0f0f2;
+  --fg: #09090b;
+  --fg-2: #3f3f46;
+  --fg-muted: #71717a;
+  --fg-subtle: #a1a1aa;
+  --sidebar: #f7f7f8;
 
-  --ok: #10b981;
-  --ok-soft: #ecfdf5;
-  --ok-line: #a7f3d0;
-  --ok-fg: #047857;
-  --bad: #f43f5e;
-  --bad-soft: #fff1f2;
-  --bad-line: #fecdd3;
-  --bad-fg: #be123c;
-  --warn: #f59e0b;
+  --ok: #16a34a;
+  --ok-soft: #f0fdf4;
+  --ok-line: #bbf7d0;
+  --ok-fg: #15803d;
+  --bad: #dc2626;
+  --bad-soft: #fef2f2;
+  --bad-line: #fecaca;
+  --bad-fg: #b91c1c;
+  --warn: #d97706;
   --warn-soft: #fffbeb;
   --warn-line: #fde68a;
   --warn-fg: #b45309;
-  --info: #0ea5e9;
-  --info-soft: #f0f9ff;
-  --info-line: #bae6fd;
-  --info-fg: #0369a1;
-  --idle: #94a3b8;
-  --idle-soft: #f8fafc;
-  --idle-line: #e2e8f0;
-  --idle-fg: #475569;
+  --info: #2563eb;
+  --info-soft: #eff6ff;
+  --info-line: #bfdbfe;
+  --info-fg: #1d4ed8;
+  --idle: #a1a1aa;
+  --idle-soft: #f4f4f5;
+  --idle-line: #e4e4e7;
+  --idle-fg: #52525b;
 
-  --chart-grid: #e8edf3;
-  --chart-bar: #fecdd3;
-  --chart-line: #0284c7;
-  --chart-neutral: #334155;
-  --chart-p95: #94a3b8;
-  --shadow: rgb(2 6 23 / 0.04);
+  --chart-grid: #f0f0f2;
+  --chart-axis: #a1a1aa;
+  --chart-line: #2563eb;
+  --chart-bar: #fca5a5;
+  --chart-neutral: #52525b;
+  --chart-p95: #a1a1aa;
+
+  /* Commit calendar scale, empty to most. */
+  --heat-0: #ebedf0;
+  --heat-1: #9be9a8;
+  --heat-2: #40c463;
+  --heat-3: #30a14e;
+  --heat-4: #216e39;
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
-  --canvas: #0a0e15;
-  --surface: #111722;
-  --surface-2: #151c29;
-  --surface-3: #1b2432;
-  --line: #243044;
-  --line-soft: #1a2231;
-  --fg: #e7edf6;
-  --fg-2: #c4cfdc;
-  --fg-muted: #8c99ac;
-  --fg-subtle: #5f6c80;
-  --chrome: #070a10;
+  --canvas: #09090b;
+  --surface: #111113;
+  --surface-2: #161618;
+  --surface-3: #1e1e21;
+  --line: #27272a;
+  --line-soft: #1c1c1f;
+  --fg: #fafafa;
+  --fg-2: #d4d4d8;
+  --fg-muted: #a1a1aa;
+  --fg-subtle: #71717a;
+  --sidebar: #0c0c0e;
 
-  --ok: #10b981;
-  --ok-soft: rgb(16 185 129 / 0.12);
-  --ok-line: rgb(16 185 129 / 0.3);
-  --ok-fg: #34d399;
-  --bad: #f43f5e;
-  --bad-soft: rgb(244 63 94 / 0.12);
-  --bad-line: rgb(244 63 94 / 0.32);
-  --bad-fg: #fb7185;
+  --ok: #22c55e;
+  --ok-soft: rgb(34 197 94 / 0.1);
+  --ok-line: rgb(34 197 94 / 0.25);
+  --ok-fg: #4ade80;
+  --bad: #ef4444;
+  --bad-soft: rgb(239 68 68 / 0.1);
+  --bad-line: rgb(239 68 68 / 0.28);
+  --bad-fg: #f87171;
   --warn: #f59e0b;
-  --warn-soft: rgb(245 158 11 / 0.12);
-  --warn-line: rgb(245 158 11 / 0.3);
+  --warn-soft: rgb(245 158 11 / 0.1);
+  --warn-line: rgb(245 158 11 / 0.25);
   --warn-fg: #fbbf24;
-  --info: #0ea5e9;
-  --info-soft: rgb(14 165 233 / 0.12);
-  --info-line: rgb(14 165 233 / 0.3);
-  --info-fg: #38bdf8;
-  --idle: #64748b;
-  --idle-soft: rgb(148 163 184 / 0.1);
-  --idle-line: rgb(148 163 184 / 0.22);
-  --idle-fg: #94a3b8;
+  --info: #3b82f6;
+  --info-soft: rgb(59 130 246 / 0.12);
+  --info-line: rgb(59 130 246 / 0.3);
+  --info-fg: #60a5fa;
+  --idle: #52525b;
+  --idle-soft: rgb(161 161 170 / 0.08);
+  --idle-line: rgb(161 161 170 / 0.18);
+  --idle-fg: #a1a1aa;
 
-  --chart-grid: #1f2937;
-  --chart-bar: rgb(244 63 94 / 0.45);
-  --chart-line: #38bdf8;
-  --chart-neutral: #94a3b8;
-  --chart-p95: #475569;
-  --shadow: rgb(0 0 0 / 0.3);
+  --chart-grid: #1f1f23;
+  --chart-axis: #71717a;
+  --chart-line: #3b82f6;
+  --chart-bar: rgb(239 68 68 / 0.55);
+  --chart-neutral: #a1a1aa;
+  --chart-p95: #52525b;
+
+  --heat-0: #1a1a1d;
+  --heat-1: #0e4429;
+  --heat-2: #006d32;
+  --heat-3: #26a641;
+  --heat-4: #39d353;
 }
 
 @theme inline {
@@ -105,7 +119,7 @@
   --color-fg-2: var(--fg-2);
   --color-fg-muted: var(--fg-muted);
   --color-fg-subtle: var(--fg-subtle);
-  --color-chrome: var(--chrome);
+  --color-sidebar: var(--sidebar);
   --color-ok: var(--ok);
   --color-ok-soft: var(--ok-soft);
   --color-ok-line: var(--ok-line);
@@ -126,9 +140,8 @@
   --color-idle-soft: var(--idle-soft);
   --color-idle-line: var(--idle-line);
   --color-idle-fg: var(--idle-fg);
-  --shadow-card: 0 1px 2px 0 var(--shadow);
-  --font-sans: var(--font-space-grotesk);
-  --font-mono: var(--font-jetbrains-mono);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 * {
@@ -140,7 +153,9 @@ body {
   margin: 0;
   background: var(--canvas);
   color: var(--fg);
-  font-family: var(--font-space-grotesk), sans-serif;
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -160,13 +175,12 @@ select {
 }
 
 ::selection {
-  background: #bae6fd;
-  color: #0c4a6e;
+  background: color-mix(in srgb, var(--info) 25%, transparent);
 }
 
 @keyframes drawer-in {
   from {
-    transform: translateX(24px);
+    transform: translateX(16px);
     opacity: 0;
   }
 }

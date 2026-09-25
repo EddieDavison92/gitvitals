@@ -3,7 +3,7 @@ import type { ActionsRun, FailureDetail } from "./types";
 
 const PREFIX = "gv:runs:";
 const MAX_RUNS = 1000;
-export const CACHE_VERSION = 3;
+export const CACHE_VERSION = 4;
 
 export type RepoCache = {
   version: number;

@@ -1,19 +1,19 @@
 "use client";
 
-import { Icon, type IconName } from "@/components/icon";
+import { Icon } from "@/components/icon";
+import { Badge, Panel, RelativeTime, StatCell, StatGrid } from "@/components/ui/primitives";
+import { DOT, rateTone, type Tone } from "@/components/ui/tones";
 import { formatDuration, formatRate, plural } from "@/lib/format";
 import { failureHeadline } from "@/lib/run-status";
 import type { RunSummary, WorkflowHealth } from "@/lib/stats";
 import type { ActionsRun } from "@/lib/types";
-import { BADGE, DOT, rateTone, TEXT, type Tone } from "@/components/ui/tones";
-import { CARD, Eyebrow, RelativeTime } from "@/components/ui/primitives";
 
-function headline(summary: RunSummary, failing: WorkflowHealth[], branch: string | null, liveCount: number, hasBranchRuns: boolean) {
-  if (failing.length > 0) {
-    return { text: `${plural(failing.length, "workflow")} failing on ${branch}`, tone: "bad" as Tone };
-  }
+/** One-line state of CI for the page header. */
+export function headline(summary: RunSummary, health: WorkflowHealth[], branch: string | null, liveCount: number) {
+  const failing = health.filter((item) => item.failing).length;
+  if (failing > 0) return { text: `${plural(failing, "workflow")} failing on ${branch}`, tone: "bad" as Tone };
   if (liveCount > 0) return { text: `${plural(liveCount, "run")} in progress`, tone: "warn" as Tone };
-  if (branch && hasBranchRuns) return { text: `All workflows passing on ${branch}`, tone: "ok" as Tone };
+  if (branch && health.length > 0) return { text: `All workflows passing on ${branch}`, tone: "ok" as Tone };
   if (summary.total === 0) return { text: "No runs in this period", tone: "idle" as Tone };
   return summary.failed > 0
     ? { text: `${plural(summary.failed, "failed run")} this period`, tone: "bad" as Tone }
@@ -26,9 +26,6 @@ export function Overview({
   recentFailures,
   health,
   branch,
-  liveCount,
-  periodLabel,
-  filtered,
   onOpenRun,
   onSelectWorkflow,
 }: {
@@ -37,189 +34,119 @@ export function Overview({
   recentFailures: number;
   health: WorkflowHealth[];
   branch: string | null;
-  liveCount: number;
-  periodLabel: string;
-  filtered: boolean;
   onOpenRun: (run: ActionsRun) => void;
   onSelectWorkflow: (workflow: string) => void;
 }) {
-  const failing = health.filter((item) => item.failing);
-  const title = headline(summary, failing, branch, liveCount, health.length > 0);
-
   return (
-    <section aria-labelledby="overview-heading" className="space-y-3">
-      <div className="flex items-end justify-between gap-3">
-        <div>
-          <Eyebrow tone="info">Current health</Eyebrow>
-          <h2 id="overview-heading" className="mt-1 flex items-center gap-2.5 text-2xl font-semibold tracking-tight sm:text-3xl">
-            <span className={`size-2.5 shrink-0 rounded-full ${DOT[title.tone]}`} />
-            {title.text}
-          </h2>
-        </div>
-        <p className="hidden text-xs text-fg-muted sm:block">
-          {periodLabel}
-          {filtered ? " · filtered" : ""}
-        </p>
-      </div>
-
-      {branch && health.length > 0 && (
-        <BranchHealth branch={branch} health={health} failing={failing} onOpenRun={onOpenRun} onSelectWorkflow={onSelectWorkflow} />
-      )}
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          icon="pulse"
+    <>
+      {branch && health.length > 0 && <BranchHealth branch={branch} health={health} onOpenRun={onOpenRun} onSelectWorkflow={onSelectWorkflow} />}
+      <StatGrid className="grid-cols-2 xl:grid-cols-4">
+        <StatCell
           label="Success rate"
+          tone={rateTone(summary.successRate)}
           value={formatRate(summary.successRate)}
-          detail={
+          sub={
             successRateDelta === null
               ? `${plural(summary.successful + summary.failed, "run")} passed or failed`
-              : `${successRateDelta >= 0 ? "+" : ""}${successRateDelta} pts vs previous period`
+              : `${successRateDelta >= 0 ? "+" : ""}${successRateDelta} pts on the previous period`
           }
-          tone={rateTone(summary.successRate)}
         />
-        <MetricCard
-          icon="warning"
-          label="Failed"
+        <StatCell
+          label="Failed runs"
+          tone={summary.failed > 0 ? "bad" : undefined}
           value={summary.failed}
-          detail={summary.failed === 0 ? "No failed runs" : `${recentFailures} in the last 48 hours`}
-          tone={summary.failed > 0 ? "bad" : "ok"}
+          sub={summary.failed === 0 ? "None this period" : `${recentFailures} in the last 48 hours`}
         />
-        <MetricCard
-          icon="activity"
+        <StatCell
           label="Runs"
           value={summary.total}
-          detail={[
-            summary.active > 0 ? `${summary.active} active` : "None active",
-            summary.passedOnRerun > 0 ? `${summary.passedOnRerun} passed on re-run` : null,
-          ]
+          sub={[summary.active > 0 ? `${summary.active} running` : null, summary.passedOnRerun > 0 ? `${summary.passedOnRerun} passed only on re-run` : null]
             .filter(Boolean)
-            .join(" · ")}
-          tone={summary.active > 0 ? "warn" : "idle"}
+            .join(" · ") || "None running"}
         />
-        <MetricCard
-          icon="clock"
-          label="Median duration"
-          value={formatDuration(summary.medianDurationMs)}
-          detail={`95% finish within ${formatDuration(summary.p95DurationMs)}`}
-          tone="idle"
-        />
-      </div>
-    </section>
+        <StatCell label="Median duration" value={formatDuration(summary.medianDurationMs)} sub={`95% finish within ${formatDuration(summary.p95DurationMs)}`} />
+      </StatGrid>
+    </>
   );
 }
 
 function BranchHealth({
   branch,
   health,
-  failing,
   onOpenRun,
   onSelectWorkflow,
 }: {
   branch: string;
   health: WorkflowHealth[];
-  failing: WorkflowHealth[];
   onOpenRun: (run: ActionsRun) => void;
   onSelectWorkflow: (workflow: string) => void;
 }) {
+  const failing = health.filter((item) => item.failing);
   const passing = health.filter((item) => !item.failing);
   return (
-    <div className={`${CARD} ${failing.length > 0 ? "border-bad-line" : ""}`}>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 sm:px-5">
-        <span className="flex items-center gap-1.5 font-mono text-xs font-semibold text-fg">
+    <Panel
+      title={
+        <span className="flex items-center gap-2">
           <Icon name="branch" className="size-3.5 text-fg-subtle" />
-          {branch}
+          <span className="font-mono">{branch}</span>
         </span>
-        <span className={`text-xs font-medium ${failing.length > 0 ? TEXT.bad : TEXT.ok}`}>
-          {failing.length > 0
-            ? `${failing.length} of ${plural(health.length, "workflow")} failing`
-            : `All ${plural(health.length, "workflow")} passing`}
+      }
+      actions={
+        <span className={failing.length > 0 ? "text-bad-fg" : "text-ok-fg"}>
+          {failing.length > 0 ? `${failing.length} of ${health.length} workflows failing` : `${health.length} workflows passing`}
         </span>
-        <div className="flex flex-wrap gap-1.5 sm:ml-auto">
+      }
+    >
+      {failing.length > 0 && (
+        <table className="w-full">
+          <tbody>
+            {failing.map((item) => (
+              <tr key={item.workflow} className="border-b border-line-soft">
+                <td className="w-0 whitespace-nowrap py-2 pl-4 pr-3">
+                  <span className="flex items-center gap-2">
+                    <span className={`size-2 rounded-full ${DOT.bad}`} />
+                    <button type="button" onClick={() => onSelectWorkflow(item.workflow)} className="text-[13px] font-medium text-fg hover:underline">
+                      {item.workflow}
+                    </button>
+                  </span>
+                </td>
+                <td className="w-0 whitespace-nowrap px-3 py-2">
+                  <Badge tone="bad">
+                    {item.streak}
+                    {item.streakComplete ? "" : "+"} in a row
+                  </Badge>
+                </td>
+                <td className="w-0 whitespace-nowrap px-3 py-2 text-xs text-fg-muted">
+                  since <RelativeTime value={item.failingSince} />
+                </td>
+                <td className="max-w-0 py-2 pl-3 pr-4">
+                  <button type="button" onClick={() => onOpenRun(item.latest)} className="flex w-full min-w-0 items-center gap-1 text-left text-xs text-fg-muted hover:text-fg">
+                    <span className="shrink-0 font-mono">#{item.latest.runNumber}</span>
+                    <span className="truncate">{failureHeadline(item.latest) ?? item.latest.name}</span>
+                    <Icon name="chevron" className="size-3 shrink-0" />
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {passing.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-4 py-3">
           {passing.map((item) => (
             <button
               key={item.workflow}
               type="button"
               onClick={() => onSelectWorkflow(item.workflow)}
               title={`Last passed ${new Date(item.latest.updatedAt).toLocaleString("en-GB")}`}
-              className="flex items-center gap-1.5 rounded-full border border-line bg-surface-2 px-2.5 py-0.5 text-[11px] text-fg-muted transition hover:border-ok-line hover:text-fg"
+              className="inline-flex items-center gap-1.5 rounded border border-line px-1.5 py-0.5 text-xs text-fg-2 transition-colors hover:border-fg-subtle"
             >
               <span className={`size-1.5 rounded-full ${DOT.ok}`} />
               {item.workflow}
             </button>
           ))}
         </div>
-      </div>
-
-      {failing.length > 0 && (
-        <ul className="divide-y divide-line-soft border-t border-line-soft">
-          {failing.map((item) => (
-            <li key={item.workflow} className="flex flex-col gap-2 px-4 py-3 sm:flex-row sm:items-center sm:px-5">
-              <div className="flex min-w-0 flex-1 items-center gap-2.5">
-                <span className={`size-2 shrink-0 rounded-full ${DOT.bad}`} />
-                <button
-                  type="button"
-                  onClick={() => onSelectWorkflow(item.workflow)}
-                  className="truncate text-sm font-semibold text-fg hover:text-info-fg"
-                >
-                  {item.workflow}
-                </button>
-                <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${BADGE.bad}`}>
-                  {item.streak}
-                  {item.streakComplete ? "" : "+"} failed in a row
-                </span>
-              </div>
-              <div className="flex min-w-0 items-center gap-3 pl-4.5 text-xs text-fg-muted sm:pl-0">
-                <span className="shrink-0">
-                  Failing since <RelativeTime value={item.failingSince} />
-                </span>
-                <button
-                  type="button"
-                  onClick={() => onOpenRun(item.latest)}
-                  className="flex min-w-0 items-center gap-1 font-medium text-info-fg hover:underline"
-                >
-                  <span className="truncate">
-                    #{item.latest.runNumber}
-                    {failureHeadline(item.latest) ? ` · ${failureHeadline(item.latest)}` : ""}
-                  </span>
-                  <Icon name="chevron" className="size-3.5 shrink-0" />
-                </button>
-              </div>
-            </li>
-          ))}
-        </ul>
       )}
-    </div>
-  );
-}
-
-function MetricCard({
-  icon,
-  label,
-  value,
-  detail,
-  tone,
-}: {
-  icon: IconName;
-  label: string;
-  value: string | number;
-  detail: string;
-  tone: Tone;
-}) {
-  return (
-    <div className={`${CARD} p-4 sm:p-5`}>
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.13em] text-fg-subtle">{label}</p>
-          <p className="mt-2 font-mono text-3xl font-semibold tracking-tight text-fg tabular-nums">{value}</p>
-        </div>
-        <div className={`grid size-9 place-items-center rounded-xl border ${BADGE[tone]}`}>
-          <Icon name={icon} className="size-4.5" />
-        </div>
-      </div>
-      <p className={`mt-3 text-xs ${tone === "bad" || tone === "ok" ? `font-medium ${TEXT[tone]}` : "text-fg-muted"}`}>
-        {detail}
-      </p>
-    </div>
+    </Panel>
   );
 }

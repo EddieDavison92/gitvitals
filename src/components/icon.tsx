@@ -12,17 +12,20 @@ export type IconName =
   | "eye"
   | "fork"
   | "git-merge"
+  | "home"
   | "issue"
   | "people"
   | "tag"
   | "filter"
   | "lock"
+  | "menu"
   | "monitor"
   | "moon"
   | "pulse"
   | "refresh"
   | "retry"
   | "search"
+  | "selector"
   | "star"
   | "sun"
   | "warning"
@@ -90,6 +93,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M6 7v10M6 7c0 4 4 6 10 6" />
     </>
   ),
+  home: <path d="M4 10.5 12 4l8 6.5V20a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-9.5Z" />,
   issue: (
     <>
       <circle cx="12" cy="12" r="9" />
@@ -114,6 +118,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M8 11V8a4 4 0 0 1 8 0v3" />
     </>
   ),
+  menu: <path d="M4 7h16M4 12h16M4 17h16" />,
   monitor: (
     <>
       <rect x="3" y="4" width="18" height="12" rx="2" />
@@ -145,6 +150,7 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="m20 20-4-4" />
     </>
   ),
+  selector: <path d="m8 9 4-4 4 4M8 15l4 4 4-4" />,
   star: <path d="m12 4 2.4 5 5.5.7-4 3.8 1 5.5-4.9-2.7L7.1 19l1-5.5-4-3.8 5.5-.7Z" />,
   sun: (
     <>

@@ -30,5 +30,7 @@ describe("formatters", () => {
   it("says just now for recent times", () => {
     expect(formatRelativeTime(1_000, 10_000)).toBe("just now");
     expect(formatRelativeTime(0, 2 * 3_600_000)).toBe("2 hours ago");
+    expect(formatRelativeTime(0, 90 * 86_400_000)).toBe("3 months ago");
+    expect(formatRelativeTime(0, 764 * 86_400_000)).toBe("2 years ago");
   });
 });

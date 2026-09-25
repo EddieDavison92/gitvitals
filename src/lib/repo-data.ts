@@ -120,10 +120,11 @@ export function useIssues(owner: string, repo: string) {
   const pages = useToken() ? 3 : 1;
   return useResource(owner, repo, `issues-search-${pages}`, issuesLoader(pages), { ttlMs: 15 * MINUTE });
 }
-export function useBranchRuns(owner: string, repo: string, branch: string | null) {
+/** Pass `enabled: false` to read whatever is cached without fetching. */
+export function useBranchRuns(owner: string, repo: string, branch: string | null, enabled = true) {
   return useResource(owner, repo, `branch-runs-${branch}`, branchRunsLoader(branch ?? ""), {
     ttlMs: 5 * MINUTE,
-    enabled: branch !== null,
+    enabled: enabled && branch !== null,
   });
 }
 export function useTraffic(owner: string, repo: string, enabled: boolean) {

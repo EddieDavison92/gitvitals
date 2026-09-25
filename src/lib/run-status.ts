@@ -40,7 +40,8 @@ export function runTone(run: ActionsRun) {
 
 export function statusLabel(run: Pick<ActionsRun, "status" | "conclusion">) {
   if (run.status === "in_progress") return "Running";
-  if (run.status === "queued") return "Queued";
+  if (run.status === "waiting") return "Waiting";
+  if (run.status !== "completed") return "Queued";
   switch (run.conclusion) {
     case "success":
       return "Passed";

@@ -40,7 +40,10 @@ export function formatRelativeTime(value: string | number | null, now = Date.now
   if (Math.abs(minutes) < 60) return relativeFormat.format(minutes, "minute");
   const hours = Math.round(minutes / 60);
   if (Math.abs(hours) < 24) return relativeFormat.format(hours, "hour");
-  return relativeFormat.format(Math.round(hours / 24), "day");
+  const days = Math.round(hours / 24);
+  if (Math.abs(days) < 45) return relativeFormat.format(days, "day");
+  if (Math.abs(days) < 548) return relativeFormat.format(Math.round(days / 30.44), "month");
+  return relativeFormat.format(Math.round(days / 365.25), "year");
 }
 
 const shortDateFormat = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short" });

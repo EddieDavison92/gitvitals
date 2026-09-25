@@ -1,4 +1,5 @@
-export type RunStatus = "queued" | "in_progress" | "completed";
+/** GitHub run and job statuses; "waiting" means held for an environment approval. */
+export type RunStatus = "requested" | "pending" | "waiting" | "queued" | "in_progress" | "completed";
 
 export type RunConclusion =
   | "success"

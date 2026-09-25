@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { Icon } from "@/components/icon";
-import { Avatar, Card, Pill, Skeleton } from "@/components/ui/primitives";
-import { BADGE, DOT, type Tone } from "@/components/ui/tones";
-import { formatCompact, formatCount, formatRate, formatRelativeTime, formatSpan } from "@/lib/format";
+import { Avatar, Badge, BUTTON, PageHeader, Panel, Skeleton } from "@/components/ui/primitives";
+import { formatCount, formatRate, formatRelativeTime, formatSpan } from "@/lib/format";
 import { activityLevel, busFactor, durationSummary, releaseCadence } from "@/lib/insights";
 import { MAX_COMPARE } from "@/lib/compare";
 import { parseRepo } from "@/lib/parse-repo";
@@ -83,7 +82,7 @@ const ROWS: Row[] = [
     group: "Activity",
     label: "Status",
     loading: (v) => !v.activity,
-    render: (v) => v.activity && <Pill tone={v.activity.tone}>{v.activity.label}</Pill>,
+    render: (v) => v.activity && <Badge tone={v.activity.tone}>{v.activity.label}</Badge>,
   },
   { group: "Activity", label: "Commits, 12 weeks", loading: (v) => !v.activity, render: (v) => formatCount(v.activity?.commits12 ?? 0), score: (v) => v.activity?.commits12 ?? null, better: "higher" },
   { group: "Activity", label: "Commits, 52 weeks", loading: (v) => !v.activity, render: (v) => formatCount(v.activity?.commits52 ?? 0), score: (v) => v.activity?.commits52 ?? null, better: "higher" },
@@ -182,24 +181,21 @@ export function CompareView({ initial }: { initial: string[] }) {
   };
 
   return (
-    <div className="mx-auto max-w-[1480px] space-y-6 px-4 py-8 sm:px-6 lg:px-8">
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-info-fg">Compare</p>
-        <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">Which repo is healthier?</h1>
-        <p className="mt-2 max-w-2xl text-sm text-fg-muted">
-          Side-by-side vital signs for up to {MAX_COMPARE} repositories. The best value in each row is highlighted.
-        </p>
-      </div>
+    <>
+      <PageHeader
+        title="Compare repositories"
+        description={`Up to ${MAX_COMPARE} repositories side by side; the best value in each row is marked.`}
+      />
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-1.5">
         {repos.map((name) => (
-          <span key={name} className="flex items-center gap-1.5 rounded-full border border-line bg-surface py-1 pl-3 pr-1 font-mono text-xs text-fg-2">
+          <span key={name} className="inline-flex h-7 items-center gap-1 rounded-md border border-line bg-surface pl-2 pr-0.5 font-mono text-xs text-fg-2">
             {name}
             <button
               type="button"
               aria-label={`Remove ${name}`}
               onClick={() => setRepos((current) => current.filter((existing) => existing !== name))}
-              className="grid size-5 place-items-center rounded-full text-fg-subtle hover:bg-surface-3 hover:text-fg"
+              className="grid size-6 place-items-center rounded text-fg-subtle hover:bg-surface-3 hover:text-fg"
             >
               <Icon name="x" className="size-3" />
             </button>
@@ -217,11 +213,11 @@ export function CompareView({ initial }: { initial: string[] }) {
               aria-label="Add a repository"
               aria-invalid={invalid}
               spellCheck={false}
-              className={`h-8 w-52 rounded-full border bg-surface px-3 font-mono text-xs text-fg outline-none placeholder:text-fg-subtle focus:ring-2 focus:ring-info-soft ${
+              className={`h-7 w-48 rounded-md border bg-surface px-2 font-mono text-xs text-fg outline-none placeholder:text-fg-subtle focus-visible:outline-none ${
                 invalid ? "border-bad-line" : "border-line focus:border-info"
               }`}
             />
-            <button type="submit" className="h-8 rounded-full bg-fg px-3 text-xs font-semibold text-surface hover:opacity-90">
+            <button type="submit" className={`${BUTTON} h-7 text-xs`}>
               Add
             </button>
           </form>
@@ -229,22 +225,18 @@ export function CompareView({ initial }: { initial: string[] }) {
       </div>
 
       {repos.length === 0 ? (
-        <Card className="p-6">
-          <p className="text-sm font-semibold text-fg">Try a comparison</p>
-          <ul className="mt-3 flex flex-wrap gap-2">
-            {SUGGESTIONS.map((pair) => (
-              <li key={pair.join()}>
-                <button
-                  type="button"
-                  onClick={() => setRepos(pair)}
-                  className="rounded-full border border-line bg-surface-2 px-3 py-1 font-mono text-xs text-fg-2 transition hover:border-info hover:text-info-fg"
-                >
-                  {pair.join("  vs  ")}
-                </button>
-              </li>
-            ))}
-          </ul>
-        </Card>
+        <Panel title="Suggestions" bodyClassName="flex flex-wrap gap-1.5 p-4">
+          {SUGGESTIONS.map((pair) => (
+            <button
+              key={pair.join()}
+              type="button"
+              onClick={() => setRepos(pair)}
+              className="rounded-md border border-line px-2 py-1 font-mono text-xs text-fg-2 transition-colors hover:border-fg-subtle hover:text-fg"
+            >
+              {pair.join(" vs ")}
+            </button>
+          ))}
+        </Panel>
       ) : (
         <CompareTable slots={slots} />
       )}
@@ -254,7 +246,7 @@ export function CompareView({ initial }: { initial: string[] }) {
           Each repo uses five search requests. Without a token GitHub allows ten a minute, so some numbers fill in after a short wait.
         </p>
       )}
-    </div>
+    </>
   );
 }
 
@@ -269,11 +261,11 @@ function best(row: Row, slots: Vitals[]) {
 
 function CompareTable({ slots }: { slots: Vitals[] }) {
   const groups = Array.from(new Set(ROWS.map((row) => row.group)));
-  const columns = `minmax(160px, 220px) repeat(${slots.length}, minmax(180px, 1fr))`;
+  const columns = `minmax(150px, 200px) repeat(${slots.length}, minmax(180px, 1fr))`;
   return (
-    <Card className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-lg border border-line bg-surface">
       <div className="min-w-fit">
-        <div className="sticky top-0 z-10 grid border-b border-line bg-surface" style={{ gridTemplateColumns: columns }}>
+        <div className="grid border-b border-line" style={{ gridTemplateColumns: columns }}>
           <div />
           {slots.map((slot) => (
             <ColumnHeader key={slot.fullName} slot={slot} />
@@ -281,19 +273,14 @@ function CompareTable({ slots }: { slots: Vitals[] }) {
         </div>
         {groups.map((group) => (
           <div key={group}>
-            <div className="border-b border-line-soft bg-surface-2 px-5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-fg-subtle">
-              {group}
-            </div>
+            <div className="border-b border-line-soft bg-surface-2 px-4 py-1.5 text-xs font-medium text-fg-muted">{group}</div>
             {ROWS.filter((row) => row.group === group).map((row) => {
               const winners = best(row, slots);
               return (
                 <div key={row.label} className="grid border-b border-line-soft last:border-b-0" style={{ gridTemplateColumns: columns }}>
-                  <div className="px-5 py-3 text-sm text-fg-muted">{row.label}</div>
+                  <div className="px-4 py-2 text-[13px] text-fg-muted">{row.label}</div>
                   {slots.map((slot, index) => (
-                    <div
-                      key={slot.fullName}
-                      className={`flex items-center gap-2 px-5 py-3 text-sm text-fg ${winners?.[index] ? "bg-ok-soft" : ""}`}
-                    >
+                    <div key={slot.fullName} className="flex items-center gap-2 border-l border-line-soft px-4 py-2 text-[13px] text-fg tabular-nums">
                       {row.loading(slot) ? <Skeleton className="h-4 w-16" /> : row.render(slot)}
                       {winners?.[index] && <Icon name="check" className="size-3.5 shrink-0 text-ok-fg" />}
                     </div>
@@ -304,34 +291,26 @@ function CompareTable({ slots }: { slots: Vitals[] }) {
           </div>
         ))}
       </div>
-    </Card>
+    </div>
   );
 }
 
 function ColumnHeader({ slot }: { slot: Vitals }) {
   const meta = slot.meta.data;
-  const tone: Tone = slot.activity?.tone ?? "idle";
   return (
-    <div className="min-w-0 px-5 py-4">
-      <div className="flex items-center gap-2.5">
-        {meta ? <Avatar src={meta.avatarUrl} alt="" size={28} className="rounded-lg" /> : <Skeleton className="size-7" />}
-        <Link href={`/${slot.fullName}`} className="min-w-0 truncate text-sm font-semibold text-fg hover:text-info-fg">
+    <div className="min-w-0 border-l border-line-soft px-4 py-3">
+      <div className="flex items-center gap-2">
+        {meta ? <Avatar src={meta.avatarUrl} alt="" size={20} className="rounded" /> : <Skeleton className="size-5" />}
+        <Link href={`/${slot.fullName}`} className="min-w-0 truncate text-[13px] font-medium text-fg hover:underline">
           {slot.fullName}
         </Link>
       </div>
       {slot.meta.error && !meta ? (
-        <p className={`mt-2 inline-block rounded border px-1.5 text-[11px] ${BADGE.warn}`}>
+        <Badge tone="warn" className="mt-1.5">
           {slot.meta.error.kind === "not_found" ? "Not found" : "Couldn't load"}
-        </p>
+        </Badge>
       ) : (
-        <p className="mt-2 line-clamp-2 text-xs text-fg-muted">{meta?.description ?? " "}</p>
-      )}
-      {slot.activity && (
-        <p className="mt-2 flex items-center gap-1.5 text-xs font-medium text-fg-2">
-          <span className={`size-1.5 rounded-full ${DOT[tone]}`} />
-          {slot.activity.label}
-          {meta && <span className="font-normal text-fg-subtle">· {formatCompact(meta.stars)} stars</span>}
-        </p>
+        <p className="mt-1 line-clamp-2 text-xs text-fg-muted">{meta?.description ?? "\u00a0"}</p>
       )}
     </div>
   );

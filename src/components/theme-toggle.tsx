@@ -16,7 +16,7 @@ export function ThemeToggle() {
       onClick={() => setThemePreference(NEXT[preference])}
       title={`${LABEL[preference]} (click to change)`}
       aria-label={`${LABEL[preference]}. Switch to ${LABEL[NEXT[preference]].toLowerCase()}`}
-      className="grid size-8 place-items-center rounded-lg border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
+      className="grid size-8 shrink-0 place-items-center rounded-md text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg"
     >
       <Icon name={ICON[preference]} className="size-4" />
     </button>

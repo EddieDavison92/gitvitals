@@ -75,4 +75,6 @@ export function touchRecentRepo(displayName: string) {
   if (raw !== null && parseRecentRepos(raw)[0] === displayName) return;
   recent.slice(MAX_REPOS - 1).forEach((name) => clearRepo(name.toLowerCase()));
   writeJSON(RECENT_REPOS_KEY, [displayName, ...recent.slice(0, MAX_REPOS - 1)]);
+  // "storage" events only reach other tabs; tell this one too.
+  if (typeof window.dispatchEvent === "function") window.dispatchEvent(new Event("gv:recent"));
 }

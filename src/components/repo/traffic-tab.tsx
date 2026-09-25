@@ -2,7 +2,7 @@
 
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { CHART_ANIMATION_MS, ChartCard, GRID, SERIES, TICK, TOOLTIP, type TooltipProps } from "@/components/ui/charts";
-import { Card, EmptyState, ResourceNote, SectionHeader, Skeleton, Stat } from "@/components/ui/primitives";
+import { EmptyState, PageHeader, Panel, ResourceNote, Skeleton, StatCell, StatGrid, TD, TH, TR } from "@/components/ui/primitives";
 import { formatCount, formatShortDate } from "@/lib/format";
 import { useTraffic } from "@/lib/repo-data";
 import { useToken } from "@/lib/token-store";
@@ -17,10 +17,13 @@ export function TrafficTab({ owner, repo, meta }: { owner: string; repo: string;
 
   if (meta && !canPush) {
     return (
-      <EmptyState icon="lock" title="Traffic needs push access" className="min-h-96">
-        GitHub only shares views, clones and referrers with people who can push to the repository.
-        {hasToken ? " The saved token can't push here." : " Add a token with push access to see them."}
-      </EmptyState>
+      <>
+        <PageHeader title="Traffic" />
+        <EmptyState icon="lock" title="Traffic needs push access" className="py-24">
+          GitHub only shares views, clones and referrers with people who can push to the repository.
+          {hasToken ? " The saved token can't push here." : " Add a token with push access to see them."}
+        </EmptyState>
+      </>
     );
   }
 
@@ -28,35 +31,32 @@ export function TrafficTab({ owner, repo, meta }: { owner: string; repo: string;
   const loading = !data && (traffic.loading || !meta);
 
   return (
-    <div className="space-y-6">
-      <Card className="grid gap-6 p-5 sm:grid-cols-4 sm:p-6">
-        <Stat label="Views, 14 days" value={data ? formatCount(data.views.count) : "–"} loading={loading} tone="info" />
-        <Stat label="Unique visitors" value={data ? formatCount(data.views.uniques) : "–"} loading={loading} />
-        <Stat label="Clones, 14 days" value={data ? formatCount(data.clones.count) : "–"} loading={loading} tone="ok" />
-        <Stat label="Unique cloners" value={data ? formatCount(data.clones.uniques) : "–"} loading={loading} />
-      </Card>
+    <>
+      <PageHeader title="Traffic" description="Views, clones and referrers over the last 14 days." />
+
+      <StatGrid className="grid-cols-2 xl:grid-cols-4">
+        <StatCell label="Views" value={data ? formatCount(data.views.count) : "–"} loading={loading} error={data ? null : traffic.error} />
+        <StatCell label="Unique visitors" value={data ? formatCount(data.views.uniques) : "–"} loading={loading} />
+        <StatCell label="Clones" value={data ? formatCount(data.clones.count) : "–"} loading={loading} />
+        <StatCell label="Unique cloners" value={data ? formatCount(data.clones.uniques) : "–"} loading={loading} />
+      </StatGrid>
       <ResourceNote error={data ? null : traffic.error} onRetry={traffic.reload} />
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <ChartCard title="Views" description="Daily page views and unique visitors.">
-          {data ? <DailyChart days={data.views.days} /> : <Skeleton className="m-2 h-56" />}
+      <div className="grid gap-5 xl:grid-cols-2">
+        <ChartCard title="Views" description="Daily total and unique">
+          {data ? <DailyChart days={data.views.days} /> : <Skeleton className="h-52" />}
         </ChartCard>
-        <ChartCard title="Clones" description="Daily clones and unique cloners.">
-          {data ? <DailyChart days={data.clones.days} /> : <Skeleton className="m-2 h-56" />}
+        <ChartCard title="Clones" description="Daily total and unique">
+          {data ? <DailyChart days={data.clones.days} /> : <Skeleton className="h-52" />}
         </ChartCard>
       </div>
 
-      <div className="grid items-start gap-4 xl:grid-cols-2">
-        <Card>
-          <SectionHeader title="Referring sites" description="Top sources of visits, last 14 days." icon="arrow-up-right" />
-          <Table
-            loading={loading}
-            rows={(data?.referrers ?? []).map((row) => ({ key: row.referrer, label: row.referrer, count: row.count, uniques: row.uniques }))}
-          />
-        </Card>
-        <Card>
-          <SectionHeader title="Popular content" description="Most viewed pages, last 14 days." icon="eye" />
-          <Table
+      <div className="grid items-start gap-5 xl:grid-cols-2">
+        <Panel title="Referring sites">
+          <SourceTable loading={loading} rows={(data?.referrers ?? []).map((row) => ({ key: row.referrer, label: row.referrer, count: row.count, uniques: row.uniques }))} />
+        </Panel>
+        <Panel title="Popular content">
+          <SourceTable
             loading={loading}
             rows={(data?.paths ?? []).map((row) => ({
               key: row.path,
@@ -66,22 +66,22 @@ export function TrafficTab({ owner, repo, meta }: { owner: string; repo: string;
               uniques: row.uniques,
             }))}
           />
-        </Card>
+        </Panel>
       </div>
-    </div>
+    </>
   );
 }
 
 function DailyChart({ days }: { days: Day[] }) {
   return (
     <ResponsiveContainer width="100%" height={220}>
-      <LineChart data={days} margin={{ top: 12, right: 8, bottom: 0, left: -18 }}>
+      <LineChart data={days} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
         <CartesianGrid {...GRID} vertical={false} />
         <XAxis dataKey="day" tickFormatter={formatShortDate} tick={TICK} axisLine={false} tickLine={false} minTickGap={24} />
         <YAxis allowDecimals={false} tick={TICK} axisLine={false} tickLine={false} />
         <Tooltip content={<DayTooltip />} />
-        <Line type="monotone" dataKey="count" stroke={SERIES.info} strokeWidth={2.5} dot={false} animationDuration={CHART_ANIMATION_MS} />
-        <Line type="monotone" dataKey="uniques" stroke={SERIES.ok} strokeWidth={2} strokeDasharray="4 4" dot={false} animationDuration={CHART_ANIMATION_MS} />
+        <Line type="monotone" dataKey="count" stroke={SERIES.info} strokeWidth={2} dot={false} animationDuration={CHART_ANIMATION_MS} />
+        <Line type="monotone" dataKey="uniques" stroke={SERIES.neutral} strokeWidth={1.5} strokeDasharray="4 4" dot={false} animationDuration={CHART_ANIMATION_MS} />
       </LineChart>
     </ResponsiveContainer>
   );
@@ -92,45 +92,46 @@ function DayTooltip({ active, payload }: TooltipProps<Day>) {
   if (!active || !day) return null;
   return (
     <div className={TOOLTIP}>
-      <p className="font-semibold text-fg">{formatShortDate(day.day)}</p>
-      <p className="mt-0.5 text-info-fg">{formatCount(day.count)} total</p>
-      <p className="text-ok-fg">{formatCount(day.uniques)} unique</p>
+      <p className="font-medium text-fg">{formatShortDate(day.day)}</p>
+      <p className="mt-0.5 text-fg-muted">
+        {formatCount(day.count)} total · {formatCount(day.uniques)} unique
+      </p>
     </div>
   );
 }
 
-function Table({
+function SourceTable({
   loading,
   rows,
 }: {
   loading: boolean;
   rows: Array<{ key: string; label: string; href?: string; count: number; uniques: number }>;
 }) {
-  if (loading) return <Skeleton className="m-5 h-40" />;
-  if (rows.length === 0) return <p className="px-5 py-6 text-sm text-fg-muted">Nothing recorded in the last 14 days.</p>;
+  if (loading) return <Skeleton className="m-4 h-40" />;
+  if (rows.length === 0) return <p className="p-4 text-[13px] text-fg-muted">Nothing recorded in the last 14 days.</p>;
   return (
-    <table className="w-full text-left text-sm">
+    <table className="w-full">
       <thead>
-        <tr className="border-b border-line-soft bg-surface-2 text-[10px] font-semibold uppercase tracking-[0.13em] text-fg-subtle">
-          <th className="px-5 py-2">Source</th>
-          <th className="px-4 py-2 text-right">Total</th>
-          <th className="px-5 py-2 text-right">Unique</th>
+        <tr>
+          <th className={TH}>Source</th>
+          <th className={`${TH} text-right`}>Total</th>
+          <th className={`${TH} text-right`}>Unique</th>
         </tr>
       </thead>
-      <tbody className="divide-y divide-line-soft">
+      <tbody>
         {rows.map((row) => (
-          <tr key={row.key}>
-            <td className="max-w-xs truncate px-5 py-2 text-fg-2">
+          <tr key={row.key} className={TR}>
+            <td className={`${TD} max-w-xs truncate text-fg-2`}>
               {row.href ? (
-                <a href={row.href} target="_blank" rel="noreferrer" className="hover:text-info-fg">
+                <a href={row.href} target="_blank" rel="noreferrer" className="hover:underline">
                   {row.label}
                 </a>
               ) : (
                 row.label
               )}
             </td>
-            <td className="px-4 py-2 text-right font-mono text-xs text-fg-muted">{formatCount(row.count)}</td>
-            <td className="px-5 py-2 text-right font-mono text-xs text-fg-muted">{formatCount(row.uniques)}</td>
+            <td className={`${TD} text-right font-mono text-fg-muted tabular-nums`}>{formatCount(row.count)}</td>
+            <td className={`${TD} text-right font-mono text-fg-muted tabular-nums`}>{formatCount(row.uniques)}</td>
           </tr>
         ))}
       </tbody>
