@@ -11,9 +11,10 @@ import { useNow } from "@/lib/use-now";
 import { AuthorMixPanel, BucketChart, CohortChart, ItemList, sampleDescription, SeriesLegend, type Series } from "./flow-parts";
 
 /** "+12 open issues in 30 days" style summary of net backlog change. */
-function netChange(delta: number) {
-  if (delta === 0) return "No net change in 30 days";
-  return `${delta > 0 ? "+" : "−"}${formatCount(Math.abs(delta))} net in 30 days`;
+/** Opened minus completed over 30 days; "not planned" closures aren't counted. */
+function openedVsCompleted(delta: number) {
+  if (delta === 0) return "As many completed as opened";
+  return delta > 0 ? `${formatCount(delta)} more opened than completed` : `${formatCount(-delta)} more completed than opened`;
 }
 
 const STATES: Series[] = [
@@ -62,7 +63,7 @@ export function IssuesTab({ owner, repo, meta }: { owner: string; repo: string; 
           value={flow.data ? formatCount(flow.data.openIssues) : "–"}
           loading={flowLoading}
           error={flow.data ? null : flow.error}
-          sub={flow.data ? netChange(flow.data.openedIssues - flow.data.completed.total) : undefined}
+          sub={flow.data ? openedVsCompleted(flow.data.openedIssues - flow.data.completed.total) : undefined}
         />
         <StatCell
           label="Opened, 30 days"

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { Icon, type IconName } from "@/components/icon";
 import { Avatar, Kbd } from "@/components/ui/primitives";
 import { parseRepo } from "@/lib/parse-repo";
@@ -13,11 +13,16 @@ import type { SidebarRepo } from "./sidebar";
 
 // Open state is shared so any trigger (sidebar button, ⌘K) drives the one palette.
 let paletteOpen = false;
+let returnFocus: HTMLElement | null = null;
 const listeners = new Set<() => void>();
 
 function setPaletteOpen(open: boolean) {
+  if (open === paletteOpen) return;
+  if (open) returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   paletteOpen = open;
   listeners.forEach((listener) => listener());
+  // Hand focus back to whatever opened the palette.
+  if (!open && returnFocus?.isConnected) returnFocus.focus();
 }
 
 export function openPalette() {
@@ -70,7 +75,8 @@ function PaletteDialog({ current, onClose }: { current: SidebarRepo | null; onCl
   const recent = useRecentRepos();
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
-  const listRef = useRef<HTMLUListElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const listId = useId();
 
   const items = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -118,8 +124,11 @@ function PaletteDialog({ current, onClose }: { current: SidebarRepo | null; onCl
     router.push(item.href);
   };
 
+  // Handled on the dialog so Escape and Tab work wherever focus is; results aren't focusable, so Tab stays on the input.
   const onKeyDown = (event: React.KeyboardEvent) => {
-    if (event.key === "ArrowDown") {
+    if (event.key === "Tab") {
+      event.preventDefault();
+    } else if (event.key === "ArrowDown") {
       event.preventDefault();
       setActive((index) => Math.min(index + 1, items.length - 1));
     } else if (event.key === "ArrowUp") {
@@ -140,6 +149,7 @@ function PaletteDialog({ current, onClose }: { current: SidebarRepo | null; onCl
         role="dialog"
         aria-modal="true"
         aria-label="Command palette"
+        onKeyDown={onKeyDown}
         className="relative w-full max-w-xl overflow-hidden rounded-lg border border-line bg-surface shadow-2xl shadow-black/30"
       >
         <div className="flex h-12 items-center gap-3 border-b border-line px-4">
@@ -151,9 +161,13 @@ function PaletteDialog({ current, onClose }: { current: SidebarRepo | null; onCl
               setQuery(event.target.value);
               setActive(0);
             }}
-            onKeyDown={onKeyDown}
             placeholder="Type owner/repo, paste a GitHub URL, or search"
             aria-label="Search"
+            role="combobox"
+            aria-expanded={items.length > 0}
+            aria-controls={listId}
+            aria-autocomplete="list"
+            aria-activedescendant={items.length > 0 ? `${listId}-${activeIndex}` : undefined}
             spellCheck={false}
             className="h-full min-w-0 flex-1 bg-transparent text-sm text-fg outline-none placeholder:text-fg-subtle focus-visible:outline-none"
           />
@@ -165,20 +179,29 @@ function PaletteDialog({ current, onClose }: { current: SidebarRepo | null; onCl
             {query.trim() ? "No matches. Enter a repo as owner/repo." : "No recent repositories yet."}
           </p>
         ) : (
-          <ul ref={listRef} role="listbox" className="max-h-[min(28rem,60vh)] overflow-y-auto p-1.5 [scrollbar-width:thin]">
-            {items.map((item, index) => {
-              const heading = index === 0 || items[index - 1].group !== item.group ? item.group : null;
-              return (
-                <li key={item.id}>
-                  {heading && <p className="px-2.5 pb-1 pt-2 text-[11px] font-medium text-fg-subtle first:pt-1">{heading}</p>}
-                  <button
-                    type="button"
+          <div
+            ref={listRef}
+            id={listId}
+            role="listbox"
+            aria-label="Results"
+            // Keep focus on the input when clicking results, so keyboard handling keeps working.
+            onMouseDown={(event) => event.preventDefault()}
+            className="max-h-[min(28rem,60vh)] overflow-y-auto p-1.5 [scrollbar-width:thin]">
+            {groupItems(items).map((group, groupIndex) => (
+              <div key={group.name} role="group" aria-labelledby={`${listId}-g${groupIndex}`}>
+                <p id={`${listId}-g${groupIndex}`} className={`px-2.5 pb-1 text-[11px] font-medium text-fg-subtle ${groupIndex === 0 ? "pt-1" : "pt-2"}`}>
+                  {group.name}
+                </p>
+                {group.entries.map(({ item, index }) => (
+                  <div
+                    key={item.id}
+                    id={`${listId}-${index}`}
                     data-index={index}
                     role="option"
                     aria-selected={index === activeIndex}
                     onMouseMove={() => setActive(index)}
                     onClick={() => go(item)}
-                    className={`flex h-9 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[13px] ${
+                    className={`flex h-9 cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-[13px] ${
                       index === activeIndex ? "bg-surface-3 text-fg" : "text-fg-2"
                     }`}
                   >
@@ -189,11 +212,11 @@ function PaletteDialog({ current, onClose }: { current: SidebarRepo | null; onCl
                     )}
                     <span className={`min-w-0 flex-1 truncate ${item.group === "Recent" || item.group === "Open" ? "font-mono text-xs" : ""}`}>{item.label}</span>
                     {item.hint && <span className="text-xs text-fg-subtle">{item.hint}</span>}
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
         )}
 
         <div className="flex items-center gap-4 border-t border-line px-4 py-2 text-[11px] text-fg-subtle">
@@ -208,4 +231,15 @@ function PaletteDialog({ current, onClose }: { current: SidebarRepo | null; onCl
       </div>
     </div>
   );
+}
+
+/** Consecutive items sharing a group, keeping each item's overall index for keyboard selection. */
+function groupItems(items: Item[]) {
+  const groups: Array<{ name: string; entries: Array<{ item: Item; index: number }> }> = [];
+  items.forEach((item, index) => {
+    const last = groups.at(-1);
+    if (last?.name === item.group) last.entries.push({ item, index });
+    else groups.push({ name: item.group, entries: [{ item, index }] });
+  });
+  return groups;
 }

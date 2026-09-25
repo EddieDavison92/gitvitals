@@ -97,7 +97,7 @@ export function StatCell({
       {loading ? (
         <Skeleton className="mt-1 h-7 w-20" />
       ) : error ? (
-        <ResourceNote error={error} className="mt-1 h-7" />
+        <ResourceNote error={error} className="mt-1 min-h-7" />
       ) : (
         <p className="mt-1 truncate text-xl font-semibold leading-7 tracking-tight text-fg tabular-nums">{value}</p>
       )}
