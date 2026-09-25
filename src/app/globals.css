@@ -144,38 +144,29 @@
   --font-mono: var(--font-geist-mono);
 }
 
-* {
-  box-sizing: border-box;
-}
+/* Base styles live in the base layer so Tailwind utilities (e.g. focus-visible:outline-none) can override them. */
+@layer base {
+  body {
+    min-height: 100vh;
+    background: var(--canvas);
+    color: var(--fg);
+    font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
 
-body {
-  min-height: 100vh;
-  margin: 0;
-  background: var(--canvas);
-  color: var(--fg);
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
-  font-feature-settings: "cv11", "ss01";
-  -webkit-font-smoothing: antialiased;
-}
+  button:not(:disabled),
+  select {
+    cursor: pointer;
+  }
 
-button,
-select,
-input {
-  font: inherit;
-}
+  :focus-visible {
+    outline: 2px solid var(--info);
+    outline-offset: 2px;
+  }
 
-button,
-select {
-  cursor: pointer;
-}
-
-:focus-visible {
-  outline: 2px solid var(--info);
-  outline-offset: 2px;
-}
-
-::selection {
-  background: color-mix(in srgb, var(--info) 25%, transparent);
+  ::selection {
+    background: color-mix(in srgb, var(--info) 25%, transparent);
+  }
 }
 
 @keyframes drawer-in {

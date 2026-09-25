@@ -1,7 +1,7 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CHART_ANIMATION_MS, ChartCard, CURSOR, EmptyChart, GRID, SERIES, TICK, TOOLTIP, type TooltipProps } from "@/components/ui/charts";
+import { CHART_ANIMATION_MS, CHART_HEIGHT, ChartCard, ChartSkeleton, CURSOR, EmptyChart, GRID, SERIES, TICK, TOOLTIP, type TooltipProps } from "@/components/ui/charts";
 import { Badge, EmptyState, PageHeader, Panel, ResourceNote, Skeleton, StatCell, StatGrid, TD, TH, TR } from "@/components/ui/primitives";
 import type { Tone } from "@/components/ui/tones";
 import { formatCompact, formatCount, formatPercent, formatRelativeTime, formatSpan } from "@/lib/format";
@@ -107,13 +107,13 @@ export function ReleasesTab({ owner, repo }: { owner: string; repo: string }) {
 
       <div className="grid gap-5 xl:grid-cols-2">
         <ChartCard title="Days between releases" description="Gap before each release, oldest first">
-          {loading ? <Skeleton className="h-52" /> : <GapChart rows={rows} />}
+          {loading ? <ChartSkeleton /> : <GapChart rows={rows} />}
         </ChartCard>
         <ChartCard title="Downloads per release" description="Total asset downloads">
           {loading ? (
-            <Skeleton className="h-52" />
+            <ChartSkeleton />
           ) : downloads === 0 ? (
-            <EmptyChart height={200}>These releases have no downloadable assets.</EmptyChart>
+            <EmptyChart>These releases have no downloadable assets.</EmptyChart>
           ) : (
             <DownloadsChart rows={rows} />
           )}
@@ -156,7 +156,7 @@ export function ReleasesTab({ owner, repo }: { owner: string; repo: string }) {
                     <td className={`${TD} whitespace-nowrap text-fg-muted`} title={dateFormat.format(new Date(release.publishedAt))}>
                       {formatRelativeTime(release.publishedAt, now)}
                     </td>
-                    <td className={`${TD} whitespace-nowrap text-right font-mono text-fg-muted tabular-nums`}>
+                    <td className={`${TD} whitespace-nowrap text-right text-fg-muted tabular-nums`}>
                       {release.gapDays === null ? "–" : formatSpan(release.gapDays * DAY)}
                     </td>
                     <td className={`${TD} text-right font-mono text-fg-2 tabular-nums`}>{release.downloads > 0 ? formatCompact(release.downloads) : "–"}</td>
@@ -236,9 +236,9 @@ function GapChart({ rows }: { rows: Row[] }) {
     .reverse()
     .filter((release) => release.gapDays !== null)
     .map((release) => ({ tag: release.tag, gapDays: Number(release.gapDays!.toFixed(1)), downloads: release.downloads }));
-  if (data.length === 0) return <EmptyChart height={200}>Needs at least two releases.</EmptyChart>;
+  if (data.length === 0) return <EmptyChart>Needs at least two releases.</EmptyChart>;
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
       <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
         <CartesianGrid {...GRID} vertical={false} />
         <XAxis dataKey="tag" tick={false} axisLine={false} tickLine={false} />
@@ -253,7 +253,7 @@ function GapChart({ rows }: { rows: Row[] }) {
 function DownloadsChart({ rows }: { rows: Row[] }) {
   const data: ChartRow[] = [...rows].reverse().map((release) => ({ tag: release.tag, gapDays: release.gapDays ?? 0, downloads: release.downloads }));
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
       <BarChart data={data} margin={{ top: 4, right: 4, bottom: 0, left: -8 }}>
         <CartesianGrid {...GRID} vertical={false} />
         <XAxis dataKey="tag" tick={false} axisLine={false} tickLine={false} />

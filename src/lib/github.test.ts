@@ -65,6 +65,24 @@ describe("fetchRuns", () => {
     expect(run.workflowName).toBe("Graph Update: pip in /");
   });
 
+  it("drops pull requests from other repositories", async () => {
+    const get = (async () => ({
+      total_count: 1,
+      workflow_runs: [
+        {
+          ...rawRun(1),
+          repository: { id: 1 },
+          pull_requests: [
+            { number: 141, base: { repo: { id: 2 } } },
+            { number: 7, base: { repo: { id: 1 } } },
+          ],
+        },
+      ],
+    })) as unknown as Fetcher;
+    const [run] = (await fetchRuns(get, "o", "r", null, 1)).runs;
+    expect(run.prNumbers).toEqual([7]);
+  });
+
   it("maps run fields", async () => {
     const { get } = pagedFetcher(1);
     const [run] = (await fetchRuns(get, "o", "r", null, 1)).runs;

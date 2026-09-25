@@ -20,8 +20,6 @@ import {
 import { branchHealth, summarizeRuns } from "@/lib/stats";
 import { useNow } from "@/lib/use-now";
 
-
-
 const SUGGESTIONS = [
   ["astral-sh/uv", "python-poetry/poetry"],
   ["vitejs/vite", "webpack/webpack"],
@@ -69,6 +67,8 @@ type Row = {
   /** Whether this repo's inputs are still loading. */
   loading: (v: Vitals) => boolean;
   render: (v: Vitals) => React.ReactNode;
+  /** Secondary line under the value. */
+  detail?: (v: Vitals) => React.ReactNode;
   /** Comparable number; null when not applicable. */
   score?: (v: Vitals) => number | null;
   better?: "higher" | "lower";
@@ -91,15 +91,8 @@ const ROWS: Row[] = [
     group: "Releases",
     label: "Latest release",
     loading: (v) => !v.cadence,
-    render: (v) =>
-      v.cadence?.latest ? (
-        <span>
-          <span className="font-mono">{v.cadence.latest.tag}</span>
-          <span className="block text-xs text-fg-muted">{formatRelativeTime(v.cadence.latest.publishedAt, v.now)}</span>
-        </span>
-      ) : (
-        "None"
-      ),
+    render: (v) => (v.cadence?.latest ? <span className="font-mono">{v.cadence.latest.tag}</span> : "None"),
+    detail: (v) => v.cadence?.latest && formatRelativeTime(v.cadence.latest.publishedAt, v.now),
     score: (v) => (v.cadence?.daysSinceLatest ?? null),
     better: "lower",
   },
@@ -125,11 +118,9 @@ const ROWS: Row[] = [
       !v.ci || v.ci.total === 0 ? (
         "No workflows"
       ) : (
-        <span className={v.ci.failing > 0 ? "text-bad-fg" : "text-ok-fg"}>
-          {v.ci.failing > 0 ? `${v.ci.failing} failing` : "Passing"}
-          <span className="block text-xs text-fg-muted">{formatRate(v.ci.rate)} of recent runs</span>
-        </span>
+        <span className={v.ci.failing > 0 ? "text-bad-fg" : "text-ok-fg"}>{v.ci.failing > 0 ? `${v.ci.failing} failing` : "Passing"}</span>
       ),
+    detail: (v) => v.ci && v.ci.total > 0 && `${formatRate(v.ci.rate)} of recent runs`,
     score: (v) => (v.ci && v.ci.total > 0 ? v.ci.rate : null),
     better: "higher",
   },
@@ -143,7 +134,7 @@ const ROWS: Row[] = [
     score: (v) => v.community.data?.healthPercentage ?? null,
     better: "higher",
   },
-  { group: "About", label: "Licence", loading: (v) => !v.meta.data, render: (v) => <span className="font-mono text-xs">{v.meta.data?.license ?? "None"}</span> },
+  { group: "About", label: "Licence", loading: (v) => !v.meta.data, render: (v) => v.meta.data?.license ?? "None" },
   { group: "About", label: "Language", loading: (v) => !v.meta.data, render: (v) => v.meta.data?.language ?? "–" },
   {
     group: "About",
@@ -189,7 +180,7 @@ export function CompareView({ initial }: { initial: string[] }) {
 
       <div className="flex flex-wrap items-center gap-1.5">
         {repos.map((name) => (
-          <span key={name} className="inline-flex h-7 items-center gap-1 rounded-md border border-line bg-surface pl-2 pr-0.5 font-mono text-xs text-fg-2">
+          <span key={name} className="inline-flex h-8 items-center gap-1 rounded-md border border-line bg-surface pl-2.5 pr-1 font-mono text-xs text-fg-2">
             {name}
             <button
               type="button"
@@ -213,11 +204,11 @@ export function CompareView({ initial }: { initial: string[] }) {
               aria-label="Add a repository"
               aria-invalid={invalid}
               spellCheck={false}
-              className={`h-7 w-48 rounded-md border bg-surface px-2 font-mono text-xs text-fg outline-none placeholder:text-fg-subtle focus-visible:outline-none ${
+              className={`h-8 w-52 rounded-md border bg-surface px-2.5 font-mono text-xs text-fg outline-none placeholder:text-fg-subtle focus-visible:outline-none ${
                 invalid ? "border-bad-line" : "border-line focus:border-info"
               }`}
             />
-            <button type="submit" className={`${BUTTON} h-7 text-xs`}>
+            <button type="submit" className={BUTTON}>
               Add
             </button>
           </form>
@@ -280,9 +271,18 @@ function CompareTable({ slots }: { slots: Vitals[] }) {
                 <div key={row.label} className="grid border-b border-line-soft last:border-b-0" style={{ gridTemplateColumns: columns }}>
                   <div className="px-4 py-2 text-[13px] text-fg-muted">{row.label}</div>
                   {slots.map((slot, index) => (
-                    <div key={slot.fullName} className="flex items-center gap-2 border-l border-line-soft px-4 py-2 text-[13px] text-fg tabular-nums">
-                      {row.loading(slot) ? <Skeleton className="h-4 w-16" /> : row.render(slot)}
-                      {winners?.[index] && <Icon name="check" className="size-3.5 shrink-0 text-ok-fg" />}
+                    <div key={slot.fullName} className="border-l border-line-soft px-4 py-2 text-[13px] leading-5 text-fg tabular-nums">
+                      {row.loading(slot) ? (
+                        <Skeleton className="my-0.5 h-4 w-16" />
+                      ) : (
+                        <>
+                          <span className="flex items-center gap-2">
+                            {row.render(slot)}
+                            {winners?.[index] && <Icon name="check" className="size-3.5 shrink-0 text-ok-fg" />}
+                          </span>
+                          {row.detail?.(slot) && <span className="block text-xs text-fg-muted">{row.detail(slot)}</span>}
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>

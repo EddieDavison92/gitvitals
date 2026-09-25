@@ -49,17 +49,17 @@ export function Panel({
 }) {
   const hasBody = children !== undefined && children !== null && children !== false;
   return (
-    <section className={`min-w-0 overflow-hidden rounded-lg border border-line bg-surface ${className}`}>
+    <section className={`flex min-w-0 flex-col overflow-hidden rounded-lg border border-line bg-surface ${className}`}>
       {(title || actions) && (
-        <header className={`flex min-h-11 items-center justify-between gap-3 px-4 py-2 ${hasBody ? "border-b border-line" : ""}`}>
+        <header className={`flex h-[52px] shrink-0 items-center justify-between gap-3 px-4 ${hasBody ? "border-b border-line" : ""}`}>
           <div className="min-w-0">
-            {title && <h2 className="truncate text-[13px] font-medium text-fg">{title}</h2>}
-            {description && <p className="truncate text-xs text-fg-muted">{description}</p>}
+            {title && <h2 className="truncate text-[13px] font-medium leading-5 text-fg">{title}</h2>}
+            {description && <p className="truncate text-xs leading-4 text-fg-muted">{description}</p>}
           </div>
           {actions && <div className="flex shrink-0 items-center gap-2 text-xs">{actions}</div>}
         </header>
       )}
-      {hasBody && <div className={bodyClassName}>{children}</div>}
+      {hasBody && <div className={`min-h-0 flex-1 ${bodyClassName}`}>{children}</div>}
     </section>
   );
 }
@@ -95,16 +95,16 @@ export function StatCell({
         <span className="truncate">{label}</span>
       </p>
       {loading ? (
-        <Skeleton className="mt-2 h-6 w-20" />
+        <Skeleton className="mt-1 h-7 w-20" />
       ) : error ? (
-        <ResourceNote error={error} className="mt-2" />
+        <ResourceNote error={error} className="mt-1 min-h-7" />
       ) : (
-        <p className="mt-1 truncate text-xl font-semibold tracking-tight text-fg tabular-nums">{value}</p>
+        <p className="mt-1 truncate text-xl font-semibold leading-7 tracking-tight text-fg tabular-nums">{value}</p>
       )}
-      {sub && !loading && !error && <p className="mt-0.5 line-clamp-2 text-xs leading-4 text-fg-muted">{sub}</p>}
+      <p className="mt-0.5 truncate text-xs leading-4 text-fg-muted">{!loading && !error && sub ? sub : "\u00a0"}</p>
     </>
   );
-  const className = "min-w-0 bg-surface px-4 py-3.5";
+  const className = "min-w-0 bg-surface px-4 py-3";
   return href ? (
     <Link href={href} className={`${className} transition-colors hover:bg-surface-2`}>
       {body}
@@ -116,8 +116,11 @@ export function StatCell({
 
 // ── Controls ───────────────────────────────────────────────
 
-export const BUTTON =
-  "inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-surface px-2.5 text-[13px] font-medium text-fg-2 transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-50";
+const BUTTON_BASE =
+  "inline-flex items-center gap-1.5 rounded-md border border-line bg-surface font-medium text-fg-2 transition-colors hover:bg-surface-2 hover:text-fg disabled:opacity-50";
+export const BUTTON = `${BUTTON_BASE} h-8 px-2.5 text-[13px]`;
+/** Compact button for top bars, panel headers and table footers. */
+export const BUTTON_SM = `${BUTTON_BASE} h-7 px-2 text-xs`;
 export const BUTTON_GHOST =
   "inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[13px] text-fg-muted transition-colors hover:bg-surface-3 hover:text-fg disabled:opacity-50";
 
@@ -166,24 +169,28 @@ export function FilterSelect({
   allLabel: string;
 }) {
   return (
-    <label className="block space-y-1 text-xs text-fg-muted">
-      {label}
-      <select
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        className="h-8 w-full rounded-md border border-line bg-surface px-2 text-[13px] text-fg outline-none focus:border-info"
-      >
-        <option value="all">{allLabel}</option>
-        {options.map((option) => {
-          const { value: optionValue, label: optionLabel } =
-            typeof option === "string" ? { value: option, label: option } : option;
-          return (
-            <option key={optionValue} value={optionValue}>
-              {optionLabel}
-            </option>
-          );
-        })}
-      </select>
+    <label className="block text-xs text-fg-muted">
+      <span className="mb-1 block">{label}</span>
+      <span className="relative block">
+        <select
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className={`h-8 w-full appearance-none truncate rounded-md border border-line bg-surface pl-2.5 pr-8 text-[13px] outline-none transition-colors hover:border-fg-subtle focus:border-info focus-visible:outline-none ${
+            value === "all" ? "text-fg-muted" : "text-fg"
+          }`}
+        >
+          <option value="all">{allLabel}</option>
+          {options.map((option) => {
+            const { value: optionValue, label: optionLabel } = typeof option === "string" ? { value: option, label: option } : option;
+            return (
+              <option key={optionValue} value={optionValue}>
+                {optionLabel}
+              </option>
+            );
+          })}
+        </select>
+        <Icon name="chevron-down" className="pointer-events-none absolute right-2 top-1/2 size-3.5 -translate-y-1/2 text-fg-subtle" />
+      </span>
     </label>
   );
 }

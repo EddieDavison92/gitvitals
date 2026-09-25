@@ -37,7 +37,8 @@ type RawRun = {
   actor?: { login: string } | null;
   run_number: number;
   run_attempt?: number;
-  pull_requests?: Array<{ number?: number }> | null;
+  pull_requests?: Array<{ number?: number; base?: { repo?: { id?: number } } }> | null;
+  repository?: { id?: number };
   head_commit?: { message?: string } | null;
   created_at: string;
   updated_at: string;
@@ -240,7 +241,9 @@ function toActionsRun(run: RawRun): ActionsRun {
     url: run.html_url,
     actor: run.actor?.login ?? "unknown",
     runNumber: run.run_number,
+    // GitHub also lists PRs in forks whose head matches; keep this repo's own.
     prNumbers: (run.pull_requests ?? [])
+      .filter((pr) => pr.base?.repo?.id === undefined || run.repository?.id === undefined || pr.base.repo.id === run.repository.id)
       .map((pr) => pr.number)
       .filter((num): num is number => typeof num === "number"),
     createdAt: run.created_at,

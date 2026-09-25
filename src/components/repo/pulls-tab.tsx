@@ -1,7 +1,7 @@
 "use client";
 
-import { ChartCard, SERIES } from "@/components/ui/charts";
-import { PageHeader, ResourceNote, Skeleton, StatCell, StatGrid } from "@/components/ui/primitives";
+import { ChartCard, ChartSkeleton, SERIES } from "@/components/ui/charts";
+import { PageHeader, ResourceNote, StatCell, StatGrid } from "@/components/ui/primitives";
 import { formatCount, formatPercent, formatSpan } from "@/lib/format";
 import { authorMix, bucketDurations, cohorts, durationSummary, largerSample, mergeDurations, topAuthors } from "@/lib/insights";
 import { useFlow, useOldestOpen, usePulls } from "@/lib/repo-data";
@@ -40,8 +40,19 @@ export function PullsTab({ owner, repo }: { owner: string; repo: string }) {
       />
 
       <StatGrid className="grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
-        <StatCell label="Open" value={flow.data ? formatCount(flow.data.openPulls) : "–"} loading={flowLoading} error={flow.data ? null : flow.error} />
-        <StatCell label="Merged, 30 days" value={flow.data ? formatCount(flow.data.merged.total) : "–"} loading={flowLoading} />
+        <StatCell
+          label="Open"
+          value={flow.data ? formatCount(flow.data.openPulls) : "–"}
+          loading={flowLoading}
+          error={flow.data ? null : flow.error}
+          sub={sample.length > 0 ? `${sample.filter((pr) => pr.state === "open" && pr.draft).length} drafts in the sample` : undefined}
+        />
+        <StatCell
+          label="Merged, 30 days"
+          value={flow.data ? formatCount(flow.data.merged.total) : "–"}
+          loading={flowLoading}
+          sub={flow.data ? `About ${formatCount(Math.round(flow.data.merged.total / 4.3))} a week` : undefined}
+        />
         <StatCell
           label="Median time to merge"
           value={merge30 ? formatSpan(merge30.median) : "–"}
@@ -62,22 +73,22 @@ export function PullsTab({ owner, repo }: { owner: string; repo: string }) {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
         <ChartCard title="Opened" description="By when they were opened, split by outcome" action={<SeriesLegend series={STATES} />}>
           {sampleLoading ? (
-            <Skeleton className="h-60" />
+            <ChartSkeleton />
           ) : (
             <CohortChart cohorts={cohorts(sample, (pr) => pr.state, STATES.map((item) => item.key), 26, now)} series={STATES} />
           )}
         </ChartCard>
         <ChartCard title="Time to merge" description="How long merged pull requests were open">
           {sampleLoading && flowLoading ? (
-            <Skeleton className="h-60" />
+            <ChartSkeleton />
           ) : (
             <BucketChart buckets={bucketDurations(largerSample(mergeDurations(sample), flow.data?.merged.durations ?? []))} color={SERIES.info} />
           )}
         </ChartCard>
       </div>
 
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
-        <AuthorMixPanel title="Who opens pull requests" mix={authorMix(sample)} top={topAuthors(sample, 10)} />
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)]">
+        <AuthorMixPanel title="Who opens pull requests" mix={authorMix(sample)} top={topAuthors(sample, 10)} loading={sampleLoading} />
         <ItemList
           title="Waiting longest"
           description="Oldest pull requests still open"

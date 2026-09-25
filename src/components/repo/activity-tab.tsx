@@ -3,7 +3,9 @@
 import { Area, AreaChart, Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   CHART_ANIMATION_MS,
+  CHART_HEIGHT,
   ChartCard,
+  ChartSkeleton,
   CURSOR,
   EmptyChart,
   GRID,
@@ -94,7 +96,7 @@ export function ActivityTab({ owner, repo, meta }: { owner: string; repo: string
                   Others
                 </span>
                 <span className="flex items-center gap-1.5">
-                  <span className="size-2 rounded-sm" style={{ background: SERIES.warn }} />
+                  <span className="size-2 rounded-sm" style={{ background: SERIES.neutral }} />
                   Owner
                 </span>
               </span>
@@ -188,7 +190,7 @@ function CommitCalendar({ weeks }: { weeks: CommitWeek[] }) {
 type ParticipationRow = { week: string; owner: number; others: number };
 
 function OwnerVsCommunity({ weeks, participation }: { weeks: CommitWeek[]; participation: { all: number[]; owner: number[] } | null }) {
-  if (!participation || participation.all.length === 0) return <Skeleton className="h-60" />;
+  if (!participation || participation.all.length === 0) return <ChartSkeleton />;
   // Participation covers the same 52 weeks as commit activity, oldest first.
   const rows: ParticipationRow[] = participation.all.map((all, index) => ({
     week: weeks[index] ? weekLabel(weeks[index].week) : String(index),
@@ -196,14 +198,14 @@ function OwnerVsCommunity({ weeks, participation }: { weeks: CommitWeek[]; parti
     others: Math.max(0, all - (participation.owner[index] ?? 0)),
   }));
   return (
-    <ResponsiveContainer width="100%" height={240}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
       <BarChart data={rows} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
         <CartesianGrid {...GRID} vertical={false} />
         <XAxis dataKey="week" tick={TICK} axisLine={false} tickLine={false} minTickGap={40} />
         <YAxis allowDecimals={false} tick={TICK} axisLine={false} tickLine={false} />
         <Tooltip content={<ParticipationTooltip />} cursor={CURSOR} />
         <Bar dataKey="others" stackId="a" fill={SERIES.info} animationDuration={CHART_ANIMATION_MS} />
-        <Bar dataKey="owner" stackId="a" fill={SERIES.warn} animationDuration={CHART_ANIMATION_MS} />
+        <Bar dataKey="owner" stackId="a" fill={SERIES.neutral} animationDuration={CHART_ANIMATION_MS} />
       </BarChart>
     </ResponsiveContainer>
   );
@@ -276,11 +278,11 @@ function CodeChurn({ owner, repo }: { owner: string; repo: string }) {
       action={<ResourceNote error={frequency.data ? null : frequency.error} onRetry={frequency.reload} />}
     >
       {unavailable ? null : frequency.loading && frequency.fetchedAt === null ? (
-        <Skeleton className="h-52" />
+        <ChartSkeleton />
       ) : rows.length === 0 ? (
-        <EmptyChart height={160}>No changes recorded.</EmptyChart>
+        <EmptyChart>No changes recorded.</EmptyChart>
       ) : (
-        <ResponsiveContainer width="100%" height={220}>
+        <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
           <AreaChart data={rows} margin={{ top: 4, right: 4, bottom: 0, left: -8 }} stackOffset="sign">
             <CartesianGrid {...GRID} vertical={false} />
             <XAxis dataKey="week" tick={TICK} axisLine={false} tickLine={false} minTickGap={40} />

@@ -50,7 +50,7 @@ export function RecentFailures({
                     <span className="shrink-0 font-mono text-xs text-fg-subtle">#{run.runNumber}</span>
                     <AttemptBadge run={run} />
                   </span>
-                  <span className="mt-0.5 block truncate text-[13px] text-bad-fg">{failureHeadline(run) ?? <span className="text-fg-muted">{run.name}</span>}</span>
+                  <span className="mt-0.5 block truncate text-[13px] text-fg-2">{failureHeadline(run) ?? <span className="text-fg-muted">{run.name}</span>}</span>
                   <span className="mt-0.5 flex items-center gap-3 text-xs text-fg-muted">
                     <span className="truncate font-mono">{run.branch}</span>
                     <span className="shrink-0">{run.actor}</span>

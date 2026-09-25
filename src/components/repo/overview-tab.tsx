@@ -197,7 +197,7 @@ export function OverviewTab({ owner, repo, meta }: Props) {
         />
       </StatGrid>
 
-      <div className="grid items-start gap-5 lg:grid-cols-2 xl:grid-cols-[1.4fr_1fr_1fr]">
+      <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-[1.4fr_1fr_1fr]">
         <ContributorsPanel owner={owner} repo={repo} resource={contributors} />
         <LanguagesPanel owner={owner} repo={repo} />
         <CommunityPanel owner={owner} repo={repo} meta={meta} />
@@ -383,7 +383,7 @@ function CommunityPanel({ owner, repo, meta }: { owner: string; repo: string; me
           ))}
           {meta?.license && (
             <li className="pt-2 text-xs text-fg-muted">
-              Licence <span className="font-mono text-fg-2">{meta.license}</span>
+              Licence <span className="text-fg-2">{meta.license}</span>
             </li>
           )}
         </ul>

@@ -14,11 +14,14 @@ export function AppShell({
   sidebar,
   crumbs,
   actions,
+  palette,
   children,
 }: {
   sidebar: (onNavigate?: () => void) => React.ReactNode;
   crumbs: Crumb[];
   actions?: React.ReactNode;
+  /** Rendered once per page (not per sidebar instance). */
+  palette?: React.ReactNode;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -35,10 +38,11 @@ export function AppShell({
   return (
     <div className="min-h-screen bg-canvas text-fg lg:grid lg:grid-cols-[232px_minmax(0,1fr)]">
       <aside className="sticky top-0 hidden h-screen border-r border-line lg:block">{sidebar()}</aside>
+      {palette}
 
       {open && (
         <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 bg-black/40 animate-[fade-in_120ms_ease-out]" onClick={() => setOpen(false)} />
+          <div className="absolute inset-0 bg-black/40 animate-[fade-in_120ms_ease-out] dark:bg-black/60" onClick={() => setOpen(false)} />
           <aside className="absolute inset-y-0 left-0 w-64 border-r border-line shadow-xl">{sidebar(() => setOpen(false))}</aside>
         </div>
       )}

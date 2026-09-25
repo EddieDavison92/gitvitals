@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { Icon } from "@/components/icon";
-import { BUTTON, EmptyState, Kbd, Panel, RelativeTime, TD, TH, TR } from "@/components/ui/primitives";
+import { BUTTON_SM, EmptyState, Kbd, Panel, RelativeTime, TD, TH, TR } from "@/components/ui/primitives";
 import type { RunView } from "@/lib/dashboard-state";
 import { formatCount } from "@/lib/format";
 import { failureHeadline, isActiveRun, isFailedRun, isPassedRun } from "@/lib/run-status";
@@ -156,7 +156,7 @@ export function RunExplorer({
               {formatCount(visible.length)} of {formatCount(runs.length)}
             </p>
             {visible.length < runs.length && (
-              <button type="button" onClick={onLoadMore} className={`${BUTTON} h-7 text-xs`}>
+              <button type="button" onClick={onLoadMore} className={BUTTON_SM}>
                 Show more
               </button>
             )}

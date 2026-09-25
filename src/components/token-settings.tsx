@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { BUTTON } from "@/components/ui/primitives";
+import { BUTTON_SM } from "@/components/ui/primitives";
 import { useRateLimits } from "@/lib/rate-limit";
 import { setToken, useToken } from "@/lib/token-store";
 import type { RateLimit } from "@/lib/types";
@@ -110,7 +110,7 @@ export function TokenSettings() {
               <span className="font-mono text-xs text-fg-muted">
                 {token.slice(0, 11)}…{token.slice(-4)}
               </span>
-              <button type="button" onClick={() => setToken(null)} className={`${BUTTON} h-7 text-xs hover:text-bad-fg`}>
+              <button type="button" onClick={() => setToken(null)} className={`${BUTTON_SM} hover:text-bad-fg`}>
                 Remove
               </button>
             </div>

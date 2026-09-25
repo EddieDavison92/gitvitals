@@ -1,8 +1,10 @@
 "use client";
 
-import { Panel } from "./primitives";
+import { Panel, Skeleton } from "./primitives";
 
 export const CHART_ANIMATION_MS = 180;
+/** Standard plot height so charts in a row line up. */
+export const CHART_HEIGHT = 240;
 export const TICK = { fontSize: 11, fill: "var(--chart-axis)" };
 export const GRID = { stroke: "var(--chart-grid)" };
 export const TOOLTIP = "rounded-md border border-line bg-surface px-2.5 py-1.5 text-xs shadow-lg shadow-black/10";
@@ -41,12 +43,31 @@ export function ChartCard({
   );
 }
 
-export function EmptyChart({ height = 240, children = "Nothing to chart yet." }: { height?: number; children?: React.ReactNode }) {
+export function EmptyChart({ height = CHART_HEIGHT, children = "Nothing to chart yet." }: { height?: number; children?: React.ReactNode }) {
   return (
     <div className="grid place-items-center px-4 text-center text-[13px] text-fg-muted" style={{ height }}>
       {children}
     </div>
   );
+}
+
+/** Legend for line series; `dashed` matches a strokeDasharray line. */
+export function LineLegend({ items }: { items: Array<{ label: string; color: string; dashed?: boolean }> }) {
+  return (
+    <span className="flex items-center gap-3 text-[11px] text-fg-muted">
+      {items.map((item) => (
+        <span key={item.label} className="flex items-center gap-1.5">
+          <span className={`h-0.5 w-3 ${item.dashed ? "border-t border-dashed" : ""}`} style={item.dashed ? { borderColor: item.color } : { background: item.color }} />
+          {item.label}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Placeholder the size of a chart (h-60 = CHART_HEIGHT). */
+export function ChartSkeleton() {
+  return <Skeleton className="h-60" />;
 }
 
 /** Tiny vertical bars for weekly counts. */

@@ -107,17 +107,17 @@ export function loadResource<T>(
     })
     .catch((failure) => {
       const error = toResourceError(failure);
-      write<T>(key, { loading: false, error });
+      const attempt = pendingAttempts.get(key) ?? 0;
+      const retryPending = error.kind === "pending" && attempt < PENDING_RETRY_MS.length;
+      // Stay "loading" while a pending retry is queued so views show skeletons, not empty states.
+      write<T>(key, { loading: retryPending, error });
       // The search limit resets every minute; try again once it has.
       if (error.kind === "rate_limited" && error.resetAt - Date.now() < 2 * 60_000) {
         setTimeout(() => loadResource(key, repo, loader, { token, ttlMs, force: true }), Math.max(1_000, error.resetAt - Date.now() + 1_500));
       }
-      if (error.kind === "pending") {
-        const attempt = pendingAttempts.get(key) ?? 0;
-        if (attempt < PENDING_RETRY_MS.length) {
-          pendingAttempts.set(key, attempt + 1);
-          setTimeout(() => loadResource(key, repo, loader, { token, ttlMs, force: true }), PENDING_RETRY_MS[attempt]);
-        }
+      if (retryPending) {
+        pendingAttempts.set(key, attempt + 1);
+        setTimeout(() => loadResource(key, repo, loader, { token, ttlMs, force: true }), PENDING_RETRY_MS[attempt]);
       }
     })
     .finally(() => inflight.delete(key));

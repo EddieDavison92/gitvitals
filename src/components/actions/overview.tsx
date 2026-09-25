@@ -3,7 +3,7 @@
 import { Icon } from "@/components/icon";
 import { Badge, Panel, RelativeTime, StatCell, StatGrid } from "@/components/ui/primitives";
 import { DOT, rateTone, type Tone } from "@/components/ui/tones";
-import { formatDuration, formatRate, plural } from "@/lib/format";
+import { formatCount, formatDuration, formatRate, plural } from "@/lib/format";
 import { failureHeadline } from "@/lib/run-status";
 import type { RunSummary, WorkflowHealth } from "@/lib/stats";
 import type { ActionsRun } from "@/lib/types";
@@ -54,12 +54,12 @@ export function Overview({
         <StatCell
           label="Failed runs"
           tone={summary.failed > 0 ? "bad" : undefined}
-          value={summary.failed}
+          value={formatCount(summary.failed)}
           sub={summary.failed === 0 ? "None this period" : `${recentFailures} in the last 48 hours`}
         />
         <StatCell
           label="Runs"
-          value={summary.total}
+          value={formatCount(summary.total)}
           sub={[summary.active > 0 ? `${summary.active} running` : null, summary.passedOnRerun > 0 ? `${summary.passedOnRerun} passed only on re-run` : null]
             .filter(Boolean)
             .join(" · ") || "None running"}

@@ -10,7 +10,7 @@ import type { ActionsRun, RunJob, RunJobs } from "@/lib/types";
 import { useNow } from "@/lib/use-now";
 import { describeError } from "./states";
 import { DOT, TEXT } from "@/components/ui/tones";
-import { BUTTON, RelativeTime } from "@/components/ui/primitives";
+import { BUTTON_SM, RelativeTime } from "@/components/ui/primitives";
 import { AttemptBadge, LiveDuration, StatusBadge } from "./run-ui";
 
 /** Side panel with a run's details, jobs, steps and failure annotations. */
@@ -49,7 +49,7 @@ export function RunDrawer({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30 animate-[fade-in_120ms_ease-out]" onClick={onClose} />
+      <div className="absolute inset-0 bg-black/30 animate-[fade-in_120ms_ease-out] dark:bg-black/60" onClick={onClose} />
       <aside
         role="dialog"
         aria-modal="true"
@@ -77,7 +77,7 @@ export function RunDrawer({
                 href={run.url}
                 target="_blank"
                 rel="noreferrer"
-                className={`${BUTTON} h-7 text-xs`}
+                className={BUTTON_SM}
               >
                 GitHub
                 <Icon name="arrow-up-right" className="size-3" />
@@ -138,7 +138,7 @@ function RunFacts({
   const facts: Array<[string, React.ReactNode]> = [
     [
       "Branch",
-      <button key="branch" type="button" onClick={() => onSelectBranch(run.branch)} className="truncate font-mono text-fg hover:underline">
+      <button key="branch" type="button" onClick={() => onSelectBranch(run.branch)} title={run.branch} className="block max-w-full truncate text-left font-mono text-fg hover:underline">
         {run.branch}
       </button>,
     ],
