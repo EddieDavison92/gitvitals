@@ -1,7 +1,7 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CHART_ANIMATION_MS, CURSOR, EmptyChart, GRID, TICK, TOOLTIP, type TooltipProps } from "@/components/ui/charts";
+import { CHART_ANIMATION_MS, CHART_HEIGHT, CURSOR, EmptyChart, GRID, TICK, TOOLTIP, type TooltipProps } from "@/components/ui/charts";
 import { Badge, Meter, Panel, ResourceNote, Skeleton } from "@/components/ui/primitives";
 import type { Tone } from "@/components/ui/tones";
 import { formatPercent, formatRelativeTime, formatShortDate, plural } from "@/lib/format";
@@ -27,7 +27,7 @@ export function SeriesLegend({ series }: { series: Series[] }) {
 export function CohortChart({
   cohorts,
   series,
-  height = 240,
+  height = CHART_HEIGHT,
 }: {
   cohorts: { unit: "day" | "week"; rows: Array<Record<string, number | string>> };
   series: Series[];
@@ -79,7 +79,7 @@ function CohortTooltip({
 export function BucketChart({
   buckets,
   color,
-  height = 240,
+  height = CHART_HEIGHT,
 }: {
   buckets: Array<{ label: string; short: string; count: number }>;
   color: string;
@@ -122,15 +122,23 @@ export function AuthorMixPanel({
   title,
   mix,
   top,
+  loading,
 }: {
   title: string;
   mix: Record<AuthorKind, number>;
   top: Array<{ author: string; kind: AuthorKind; count: number }>;
+  loading: boolean;
 }) {
   const total = Object.values(mix).reduce((sum, value) => sum + value, 0);
   return (
     <Panel title={title} description="Authors in the sample">
-      {total === 0 ? (
+      {loading ? (
+        <div className="space-y-4 p-4">
+          {Array.from({ length: 4 }, (_, index) => (
+            <Skeleton key={index} className="h-7" />
+          ))}
+        </div>
+      ) : total === 0 ? (
         <p className="p-4 text-[13px] text-fg-muted">No authors in the sample.</p>
       ) : (
         <>

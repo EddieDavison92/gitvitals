@@ -5,8 +5,9 @@ import { useEffect } from "react";
 import { ActionsDashboard } from "@/components/actions/dashboard";
 import { Icon } from "@/components/icon";
 import { AppShell, PageBody } from "@/components/shell/app-shell";
+import { CommandPalette } from "@/components/shell/command-palette";
 import { Sidebar } from "@/components/shell/sidebar";
-import { BUTTON, describeResourceError, EmptyState } from "@/components/ui/primitives";
+import { BUTTON_SM, describeResourceError, EmptyState } from "@/components/ui/primitives";
 import type { DashboardState } from "@/lib/dashboard-state";
 import { formatCompact } from "@/lib/format";
 import { useRepoMeta } from "@/lib/repo-data";
@@ -52,6 +53,7 @@ export function RepoShell({
       sidebar={(onNavigate) => <Sidebar current={{ owner, repo, meta: meta.data, tab }} onNavigate={onNavigate} />}
       crumbs={crumbs}
       actions={<RepoFacts owner={owner} repo={repo} meta={meta.data} />}
+      palette={<CommandPalette current={{ owner, repo, meta: meta.data, tab }} />}
     >
       {notFound ? (
         <PageBody>
@@ -98,7 +100,7 @@ function RepoFacts({ owner, repo, meta }: { owner: string; repo: string; meta: R
           {meta.license && (
             <div className="hidden xl:block">
               <dt className="sr-only">Licence</dt>
-              <dd className="font-mono">{meta.license}</dd>
+              <dd>{meta.license}</dd>
             </div>
           )}
           {meta.language && (
@@ -109,7 +111,7 @@ function RepoFacts({ owner, repo, meta }: { owner: string; repo: string; meta: R
           )}
         </dl>
       )}
-      <a href={`https://github.com/${owner}/${repo}`} target="_blank" rel="noreferrer" className={`${BUTTON} h-7 text-xs`}>
+      <a href={`https://github.com/${owner}/${repo}`} target="_blank" rel="noreferrer" className={BUTTON_SM}>
         GitHub
         <Icon name="arrow-up-right" className="size-3" />
       </a>

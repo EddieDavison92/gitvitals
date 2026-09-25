@@ -282,7 +282,7 @@ export function ActionsDashboard({
                 onSelectWorkflow={(workflow) => update({ workflow })}
               />
 
-              <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
+              <div className="grid gap-5 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
                 <RecentFailures
                   failures={recentFailures}
                   showAll={showAllFailures}

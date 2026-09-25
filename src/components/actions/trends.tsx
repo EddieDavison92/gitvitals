@@ -1,30 +1,15 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, ComposedChart, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CHART_ANIMATION_MS as ANIMATION_MS, ChartCard, CURSOR, EmptyChart, GRID, SERIES, TICK, TOOLTIP, type TooltipProps } from "@/components/ui/charts";
+import { CHART_ANIMATION_MS as ANIMATION_MS, CHART_HEIGHT as HEIGHT, ChartCard, CURSOR, EmptyChart, GRID, LineLegend, SERIES, TICK, TOOLTIP, type TooltipProps } from "@/components/ui/charts";
 import { formatDuration, formatDurationAxis, formatShortDate } from "@/lib/format";
 import type { DayStat, WorkflowStat } from "@/lib/stats";
-
-const HEIGHT = 220;
-
-function Legend({ items }: { items: Array<{ label: string; color: string; dashed?: boolean }> }) {
-  return (
-    <span className="flex items-center gap-3 text-[11px] text-fg-muted">
-      {items.map((item) => (
-        <span key={item.label} className="flex items-center gap-1.5">
-          <span className={`h-0.5 w-3 ${item.dashed ? "border-t border-dashed" : ""}`} style={item.dashed ? { borderColor: item.color } : { background: item.color }} />
-          {item.label}
-        </span>
-      ))}
-    </span>
-  );
-}
 
 export function Trends({ daily, workflows }: { daily: DayStat[]; workflows: WorkflowStat[] }) {
   const busiest = [...workflows].sort((a, b) => b.runs - a.runs).slice(0, 6);
   return (
     <div className="grid gap-5 xl:grid-cols-3">
-      <ChartCard title="Daily success rate" description="Bars show failed runs" action={<Legend items={[{ label: "Success", color: SERIES.info }]} />}>
+      <ChartCard title="Daily success rate" description="Bars show failed runs" action={<LineLegend items={[{ label: "Success", color: SERIES.info }]} />}>
         {daily.length > 0 ? (
           <ResponsiveContainer width="100%" height={HEIGHT}>
             <ComposedChart data={daily} margin={{ top: 4, right: 0, bottom: 0, left: -20 }}>
@@ -55,7 +40,7 @@ export function Trends({ daily, workflows }: { daily: DayStat[]; workflows: Work
       <ChartCard
         title="Run duration"
         description="Daily median and 95th percentile"
-        action={<Legend items={[{ label: "p50", color: SERIES.info }, { label: "p95", color: "var(--chart-p95)", dashed: true }]} />}
+        action={<LineLegend items={[{ label: "p50", color: SERIES.info }, { label: "p95", color: "var(--chart-p95)", dashed: true }]} />}
       >
         {daily.some((day) => day.p50Minutes !== null) ? (
           <ResponsiveContainer width="100%" height={HEIGHT}>
@@ -83,8 +68,7 @@ export function Trends({ daily, workflows }: { daily: DayStat[]; workflows: Work
                 type="category"
                 dataKey="workflow"
                 width={120}
-                tick={{ ...TICK, fill: "var(--fg-muted)" }}
-                tickFormatter={(value: string) => (value.length > 18 ? `${value.slice(0, 17)}…` : value)}
+                tick={<WorkflowTick />}
                 axisLine={false}
                 tickLine={false}
               />
@@ -97,6 +81,17 @@ export function Trends({ daily, workflows }: { daily: DayStat[]; workflows: Work
         )}
       </ChartCard>
     </div>
+  );
+}
+
+/** Single-line workflow label; recharts wraps long category ticks at spaces otherwise. */
+function WorkflowTick({ x, y, payload }: { x?: number; y?: number; payload?: { value: string } }) {
+  const value = payload?.value ?? "";
+  return (
+    <text x={x} y={y} dy={4} textAnchor="end" fontSize={TICK.fontSize} fill="var(--fg-muted)">
+      <title>{value}</title>
+      {value.length > 18 ? `${value.slice(0, 17)}…` : value}
+    </text>
   );
 }
 

@@ -1,14 +1,20 @@
 "use client";
 
 import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { CHART_ANIMATION_MS, ChartCard, GRID, SERIES, TICK, TOOLTIP, type TooltipProps } from "@/components/ui/charts";
+import { CHART_ANIMATION_MS, CHART_HEIGHT, ChartCard, ChartSkeleton, GRID, LineLegend, SERIES, TICK, TOOLTIP, type TooltipProps } from "@/components/ui/charts";
 import { EmptyState, PageHeader, Panel, ResourceNote, Skeleton, StatCell, StatGrid, TD, TH, TR } from "@/components/ui/primitives";
-import { formatCount, formatShortDate } from "@/lib/format";
+import { formatCompact, formatCount, formatShortDate } from "@/lib/format";
 import { useTraffic } from "@/lib/repo-data";
 import { useToken } from "@/lib/token-store";
 import type { RepoMeta } from "@/lib/types";
 
 type Day = { day: string; count: number; uniques: number };
+
+const LEGEND = [
+  { label: "Total", color: SERIES.info },
+  { label: "Unique", color: SERIES.neutral, dashed: true },
+];
+const perDay = (count: number) => `About ${formatCompact(count / 14)} a day`;
 
 export function TrafficTab({ owner, repo, meta }: { owner: string; repo: string; meta: RepoMeta | null }) {
   const hasToken = useToken() !== null;
@@ -35,23 +41,23 @@ export function TrafficTab({ owner, repo, meta }: { owner: string; repo: string;
       <PageHeader title="Traffic" description="Views, clones and referrers over the last 14 days." />
 
       <StatGrid className="grid-cols-2 xl:grid-cols-4">
-        <StatCell label="Views" value={data ? formatCount(data.views.count) : "–"} loading={loading} error={data ? null : traffic.error} />
-        <StatCell label="Unique visitors" value={data ? formatCount(data.views.uniques) : "–"} loading={loading} />
-        <StatCell label="Clones" value={data ? formatCount(data.clones.count) : "–"} loading={loading} />
-        <StatCell label="Unique cloners" value={data ? formatCount(data.clones.uniques) : "–"} loading={loading} />
+        <StatCell label="Views" value={data ? formatCount(data.views.count) : "–"} loading={loading} error={data ? null : traffic.error} sub={data && perDay(data.views.count)} />
+        <StatCell label="Unique visitors" value={data ? formatCount(data.views.uniques) : "–"} loading={loading} sub="Distinct visitors in 14 days" />
+        <StatCell label="Clones" value={data ? formatCount(data.clones.count) : "–"} loading={loading} sub={data && perDay(data.clones.count)} />
+        <StatCell label="Unique cloners" value={data ? formatCount(data.clones.uniques) : "–"} loading={loading} sub="Distinct cloners in 14 days" />
       </StatGrid>
       <ResourceNote error={data ? null : traffic.error} onRetry={traffic.reload} />
 
       <div className="grid gap-5 xl:grid-cols-2">
-        <ChartCard title="Views" description="Daily total and unique">
-          {data ? <DailyChart days={data.views.days} /> : <Skeleton className="h-52" />}
+        <ChartCard title="Views" description="Per day" action={<LineLegend items={LEGEND} />}>
+          {data ? <DailyChart days={data.views.days} /> : <ChartSkeleton />}
         </ChartCard>
-        <ChartCard title="Clones" description="Daily total and unique">
-          {data ? <DailyChart days={data.clones.days} /> : <Skeleton className="h-52" />}
+        <ChartCard title="Clones" description="Per day" action={<LineLegend items={LEGEND} />}>
+          {data ? <DailyChart days={data.clones.days} /> : <ChartSkeleton />}
         </ChartCard>
       </div>
 
-      <div className="grid items-start gap-5 xl:grid-cols-2">
+      <div className="grid gap-5 xl:grid-cols-2">
         <Panel title="Referring sites">
           <SourceTable loading={loading} rows={(data?.referrers ?? []).map((row) => ({ key: row.referrer, label: row.referrer, count: row.count, uniques: row.uniques }))} />
         </Panel>
@@ -74,7 +80,7 @@ export function TrafficTab({ owner, repo, meta }: { owner: string; repo: string;
 
 function DailyChart({ days }: { days: Day[] }) {
   return (
-    <ResponsiveContainer width="100%" height={220}>
+    <ResponsiveContainer width="100%" height={CHART_HEIGHT}>
       <LineChart data={days} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
         <CartesianGrid {...GRID} vertical={false} />
         <XAxis dataKey="day" tickFormatter={formatShortDate} tick={TICK} axisLine={false} tickLine={false} minTickGap={24} />

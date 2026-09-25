@@ -78,7 +78,7 @@ export function ActionsControls({
         onChange={(period) => update({ period })}
         options={PERIOD_OPTIONS.map((option) => ({ value: option.value, label: option.shortLabel, title: option.label }))}
       />
-      <button type="button" onClick={onToggleFilters} aria-expanded={filtersOpen} className={`${BUTTON} ${active > 0 || filtersOpen ? "text-fg" : ""}`}>
+      <button type="button" onClick={onToggleFilters} aria-expanded={filtersOpen} className={`${BUTTON} aria-expanded:bg-surface-2 aria-expanded:text-fg`}>
         <Icon name="filter" className="size-3.5" />
         Filters
         {active > 0 && <span className="rounded bg-info px-1 font-mono text-[10px] leading-4 text-white">{active}</span>}

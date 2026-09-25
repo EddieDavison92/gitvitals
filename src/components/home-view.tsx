@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Icon, type IconName } from "@/components/icon";
 import { RepoPicker } from "@/components/repo-picker";
-import { Avatar, Badge, Panel, TD, TR } from "@/components/ui/primitives";
+import { Avatar, Badge, Panel, TD, TextLink, TR } from "@/components/ui/primitives";
 import { formatCompact } from "@/lib/format";
 import type { CommitWeek } from "@/lib/github-insights";
 import { activityLevel } from "@/lib/insights";
@@ -42,7 +42,11 @@ export function HomeView() {
 
       {recent.length > 0 ? <RecentTable names={recent} /> : null}
 
-      <Panel title="Examples" bodyClassName="flex flex-wrap gap-1.5 p-4">
+      <Panel
+        title="Examples"
+        actions={<TextLink href="/compare?repos=astral-sh/uv,python-poetry/poetry">Compare uv and Poetry</TextLink>}
+        bodyClassName="flex flex-wrap gap-1.5 p-4"
+      >
         {EXAMPLES.map((name) => (
           <Link
             key={name}
@@ -52,9 +56,6 @@ export function HomeView() {
             {name}
           </Link>
         ))}
-        <Link href="/compare?repos=astral-sh/uv,python-poetry/poetry" className="rounded-md px-2 py-1 text-xs text-fg-muted hover:text-fg">
-          Compare uv and Poetry →
-        </Link>
       </Panel>
 
       <section>
